@@ -159,7 +159,7 @@ endif()
 set(LIBRADIO_SOURCES
     src/attr.c
     src/ax25.c
-    src/conf.c
+    src/config.c
     src/decimate.c
     src/filter.c
     src/misc.c
@@ -172,6 +172,90 @@ set(LIBRADIO_SOURCES
 
 # Create libradio (static for now, but could be shared)
 add_library(radio STATIC ${LIBRADIO_SOURCES})
+
+
+# ---- Driver plugins (built as MODULE and dlopened at runtime) ----
+function(add_driver name)
+  cmake_parse_arguments(DRV "" "" "SOURCES;LIBS;INCLUDES" ${ARGN})
+  add_library(${name} MODULE ${DRV_SOURCES})
+  if(DRV_INCLUDES)
+    target_include_directories(${name} PRIVATE ${DRV_INCLUDES})
+  endif()
+  target_link_libraries(${name} PRIVATE radio ${DRV_LIBS})
+  install(TARGETS ${name} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/ka9q-radio COMPONENT runtime)
+endfunction()
+
+# Airspy
+if(AIRSPY_FOUND)
+  add_driver(airspy SOURCES src/airspy.c LIBS ${AIRSPY_LIBRARIES} INCLUDES ${AIRSPY_INCLUDE_DIRS})
+endif()
+
+# AirspyHF
+if(AIRSPYHF_FOUND)
+  add_driver(airspyhf SOURCES src/airspyhf.c LIBS ${AIRSPYHF_LIBRARIES} INCLUDES ${AIRSPYHF_INCLUDE_DIRS})
+endif()
+
+# RTL-SDR
+if(RTLSDR_FOUND)
+  add_driver(rtlsdr SOURCES src/rtlsdr.c LIBS ${RTLSDR_LIBRARIES} INCLUDES ${RTLSDR_INCLUDE_DIRS})
+endif()
+
+# HackRF
+if(HACKRF_FOUND)
+  add_driver(hackrf SOURCES src/hackrf.c LIBS ${HACKRF_LIBRARIES} INCLUDES ${HACKRF_INCLUDE_DIRS})
+endif()
+
+# Funcube (needs PortAudio and libusb)
+if(PORTAUDIO_FOUND AND USB_LIBRARY AND USB_INCLUDE_DIR)
+  add_driver(funcube SOURCES src/funcube.c;src/fcd.c;src/hid-libusb.c LIBS ${PORTAUDIO_LIBRARIES} ${USB_LIBRARY} INCLUDES ${PORTAUDIO_INCLUDE_DIRS} ${USB_INCLUDE_DIR})
+endif()
+
+# RX888 (needs libusb)
+if(USB_LIBRARY AND USB_INCLUDE_DIR)
+  add_driver(rx888 SOURCES src/rx888.c;src/ezusb.c;src/hid-libusb.c LIBS ${USB_LIBRARY} INCLUDES ${USB_INCLUDE_DIR})
+endif()
+
+# SDRplay, HydraSDR, Fobos can be added similarly when their SDKs are available
+# AirspyHF
+if(AIRSPYHF_FOUND)
+  add_driver(airspyhf SOURCES src/airspyhf.c LIBS ${AIRSPYHF_LIBRARIES})
+endif()
+
+# RTL-SDR
+if(RTLSDR_FOUND)
+  add_driver(rtlsdr SOURCES src/rtlsdr.c LIBS ${RTLSDR_LIBRARIES})
+endif()
+
+# HackRF
+if(HACKRF_FOUND)
+  add_driver(hackrf SOURCES src/hackrf.c LIBS ${HACKRF_LIBRARIES})
+endif()
+
+# Funcube (uses PortAudio/libusb in source tree)
+if(PORTAUDIO_FOUND AND USB_FOUND)
+  add_driver(funcube SOURCES src/funcube.c;src/fcd.c;src/hid-libusb.c LIBS ${PORTAUDIO_LIBRARIES} ${USB_LIBRARIES})
+endif()
+
+# RX888 (needs libusb)
+if(USB_FOUND)
+  add_driver(rx888 SOURCES src/rx888.c;src/ezusb.c;src/hid-libusb.c LIBS ${USB_LIBRARIES})
+endif()
+
+# SDRplay (optional API)
+if(ENABLE_SDRPLAY AND SDRPLAY_FOUND)
+  add_driver(sdrplay SOURCES src/sdrplay.c LIBS ${SDRPLAY_LIBRARIES})
+endif()
+
+# HydraSDR (optional)
+if(ENABLE_HYDRASDR AND HYDRASDR_FOUND)
+  add_driver(hydrasdr SOURCES src/hydrasdr.c LIBS ${HYDRASDR_LIBRARIES})
+endif()
+
+# Fobos (optional)
+if(ENABLE_FOBOS AND FOBOS_FOUND)
+  add_driver(fobos SOURCES src/fobos.c LIBS ${FOBOS_LIBRARIES})
+endif()
+
 target_include_directories(radio PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
     ${FFTW3F_INCLUDE_DIRS}
@@ -194,34 +278,24 @@ set(DRIVER_LIBS "")
 # Core drivers (always included)
 list(APPEND DRIVER_SOURCES src/sig_gen.c)
 
-if(HAVE_AIRSPY)
-    list(APPEND DRIVER_SOURCES src/airspy.c)
-    list(APPEND DRIVER_LIBS ${AIRSPY_LIBRARIES})
+if(HAVE_AIRSPY)    list(APPEND DRIVER_LIBS ${AIRSPY_LIBRARIES})
 endif()
 
-if(HAVE_AIRSPYHF)
-    list(APPEND DRIVER_SOURCES src/airspyhf.c)
-    list(APPEND DRIVER_LIBS ${AIRSPYHF_LIBRARIES})
+if(HAVE_AIRSPYHF)    list(APPEND DRIVER_LIBS ${AIRSPYHF_LIBRARIES})
 endif()
 
-if(HAVE_RTLSDR)
-    list(APPEND DRIVER_SOURCES src/rtlsdr.c)
-    list(APPEND DRIVER_LIBS ${RTLSDR_LIBRARIES})
+if(HAVE_RTLSDR)    list(APPEND DRIVER_LIBS ${RTLSDR_LIBRARIES})
 endif()
 
-if(HAVE_HACKRF)
-    list(APPEND DRIVER_SOURCES src/hackrf.c)
-    list(APPEND DRIVER_LIBS ${HACKRF_LIBRARIES})
+if(HAVE_HACKRF)    list(APPEND DRIVER_LIBS ${HACKRF_LIBRARIES})
 endif()
 
 # Main daemon: radiod
 add_executable(radiod
-    src/radiod.c
-    src/am.c
-    src/fm.c
-    src/linear.c
-    src/packet.c
-    ${DRIVER_SOURCES}
+  src/main.c
+  src/audio.c src/fm.c src/wfm.c src/linear.c src/spectrum.c
+  src/radio.c src/radio_status.c src/rtcp.c
+  src/fcd.c src/hid-libusb.c
 )
 target_link_libraries(radiod PRIVATE
     radio
@@ -295,10 +369,11 @@ install(FILES
 # Install example configuration files
 install(DIRECTORY config/
     DESTINATION ${KA9Q_CONFIG_DIR}
-    FILES_MATCHING PATTERN "*.conf"
-    PATTERN "*.conf.example"
     COMPONENT runtime
     OPTIONAL
+    FILES_MATCHING
+        PATTERN "*.conf"
+        PATTERN "*.conf.example" EXCLUDE
 )
 
 # Create state directory
