@@ -1,0 +1,75 @@
+# -*- coding: utf-8; mode: tcl; tab-width: 4; indent-tabs-mode: nil; c-basic-offset: 4 -*- vim:fenc=utf-8:ft=tcl:et:sw=4:ts=4:sts=4
+
+# MacPorts Portfile Template for ka9q-radio
+# Copy to a local ports tree or submit to MacPorts
+
+PortSystem          1.0
+PortGroup           cmake 1.1
+PortGroup           github 1.0
+
+github.setup        ka9q ka9q-radio 1.0.0 v
+revision            0
+categories          science comms hamradio
+license             GPL-3
+maintainers         nomaintainer
+description         Multichannel SDR based on fast convolution
+long_description    ka9q-radio is a software defined radio for Linux that \
+                    features efficient multichannel reception using fast \
+                    convolution and IP multicasting for signal and control.
+
+checksums           rmd160  YOUR_RMD160_HERE \
+                    sha256  YOUR_SHA256_HERE \
+                    size    YOUR_SIZE_HERE
+
+depends_build-append \
+                    port:pkgconfig
+
+depends_lib         port:fftw-3-single \
+                    port:opus \
+                    port:libbsd \
+                    port:iniparser \
+                    port:libusb \
+                    port:portaudio \
+                    port:ncurses
+
+# Optional hardware support
+variant airspy description {Enable Airspy support} {
+    depends_lib-append port:airspy
+}
+
+variant hackrf description {Enable HackRF support} {
+    depends_lib-append port:hackrf
+}
+
+variant rtlsdr description {Enable RTL-SDR support} {
+    depends_lib-append port:rtl-sdr
+}
+
+configure.args-append \
+                    -DCMAKE_PREFIX_PATH=${prefix}
+
+destroot.keepdirs   ${destroot}${prefix}/etc/radio \
+                    ${destroot}${prefix}/var/lib/ka9q-radio
+
+post-destroot {
+    # Create config directory
+    xinstall -d ${destroot}${prefix}/etc/radio
+    
+    # Create state directory
+    xinstall -d ${destroot}${prefix}/var/lib/ka9q-radio
+}
+
+notes "
+Configuration files should be placed in:
+    ${prefix}/etc/radio/
+
+Example: ${prefix}/etc/radio/radiod@hf.conf
+
+Start radiod manually:
+    ${prefix}/sbin/radiod -v ${prefix}/etc/radio/radiod@hf.conf
+
+Note: macOS does not support all Linux-specific features (e.g., Avahi).
+
+To enable hardware support, install with variants:
+    sudo port install ka9q-radio +airspy +hackrf +rtlsdr
+"

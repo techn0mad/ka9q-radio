@@ -1,0 +1,252 @@
+ka9q-radio CMake Build System - File Structure
+================================================
+
+PROJECT ROOT
+│
+├── CMakeLists.txt (15KB) ⭐ CORE BUILD FILE
+│   └─> Main CMake configuration
+│       • Cross-platform support (Linux/FreeBSD/macOS)
+│       • Component-based packaging (runtime + systemd)
+│       • Automatic dependency detection
+│       • Package generation (DEB/RPM/TXZ)
+│
+├── README.md (8.4KB) 📘 MAIN DOCUMENTATION
+│   └─> Complete overview of all files
+│       • Feature summary
+│       • Platform support matrix
+│       • File descriptions
+│       • Installation directories
+│
+├── START_HERE.md (8.5KB) 🚀 NEW USER GUIDE
+│   └─> Quick start for first-time users
+│       • TL;DR instructions
+│       • Document roadmap
+│       • Common questions
+│       • Philosophy and principles
+│
+├── COMPONENT_GUIDE.md (13KB) 📊 VISUAL GUIDE
+│   └─> Diagrams and flowcharts
+│       • Build process flow
+│       • Installation scenarios  
+│       • Dependency graphs
+│       • Decision trees
+│
+├── COMPONENTS.md (7.9KB) 📦 PACKAGING DEEP DIVE
+│   └─> Detailed component documentation
+│       • How components work
+│       • Building individual components
+│       • Distribution strategies
+│       • Migration paths
+│
+├── CMAKE_README.md (9.2KB) 🛠️ BUILD REFERENCE
+│   └─> Complete build documentation
+│       • Prerequisites per platform
+│       • Build instructions
+│       • Configuration options
+│       • Troubleshooting
+│
+├── QUICKSTART.md (5.5KB) ⚡ INTEGRATION GUIDE
+│   └─> Step-by-step setup
+│       • Prepare repository
+│       • Adjust source paths
+│       • Build and test
+│       • Common adjustments
+│
+├── INIT_SYSTEMS.md (8KB) 🔧 SYSTEMD vs NON-SYSTEMD
+│   └─> Init system support
+│       • Detection logic
+│       • Use cases and scenarios
+│       • Manual service setup
+│       • Compatibility matrix
+│
+├── MACOS.md (5.2KB) 🍎 MACOS SPECIFICS
+│   └─> macOS platform guide
+│       • Homebrew detection
+│       • MacPorts detection
+│       • Mixed installations
+│       • Troubleshooting
+│
+├── systemd/
+│   └── radiod@.service.in (628B) ⚙️ SYSTEMD TEMPLATE
+│       └─> Service file template
+│           • Multiple instance support
+│           • Configured by CMake
+│           • Part of systemd component
+│
+├── debian/
+│   ├── postinst (2.2KB) 📋 RUNTIME INSTALLER
+│   │   └─> Post-installation script
+│   │       • Creates radio user/group
+│   │       • Sets permissions
+│   │       • Adapts to init system
+│   │
+│   └── systemd-postinst (1.1KB) 📋 SYSTEMD INSTALLER
+│       └─> systemd component installer
+│           • Reloads systemd
+│           • Provides instructions
+│
+└── freebsd/
+    └── radiod.in (3KB) 🔱 FREEBSD RC SCRIPT
+        └─> FreeBSD service script
+            • Multiple instance support
+            • rc.d integration
+
+
+DOCUMENTATION READING ORDER
+============================
+
+1. For New Users:
+   START_HERE.md → Gives you the big picture and TL;DR
+
+2. For Quick Setup:
+   QUICKSTART.md → Step-by-step integration into ka9q-radio
+
+3. For Understanding Components:
+   COMPONENT_GUIDE.md → Visual guide with diagrams
+   COMPONENTS.md → Detailed technical documentation
+
+4. For Building:
+   CMAKE_README.md → Complete build reference
+
+5. For Init System Questions:
+   INIT_SYSTEMS.md → systemd vs non-systemd scenarios
+
+6. For macOS:
+   MACOS.md → Homebrew and MacPorts support
+
+7. For Reference:
+   README.md → Complete file listing and descriptions
+
+
+BUILD WORKFLOW
+==============
+
+┌─────────────────────────────────────────────────────────────┐
+│ 1. Clone ka9q-radio                                        │
+│    git clone https://github.com/ka9q/ka9q-radio.git        │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 2. Copy CMake files to repository                          │
+│    cp CMakeLists.txt ./                                     │
+│    cp -r systemd debian freebsd ./                          │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 3. Configure and build                                      │
+│    mkdir build && cd build                                  │
+│    cmake ..                                                 │
+│    cmake --build . -j                                       │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ 4. Generate packages                                        │
+│    cpack -G DEB                                             │
+└─────────────────────────────────────────────────────────────┘
+                          ↓
+┌─────────────────────────────────────────────────────────────┐
+│ RESULT: Two packages                                        │
+│ • ka9q-radio-1.0.0-Linux.deb (runtime)                     │
+│ • ka9q-radio-systemd-1.0.0-Linux.deb (systemd support)     │
+└─────────────────────────────────────────────────────────────┘
+
+
+COMPONENT PACKAGING
+===================
+
+ONE BUILD → TWO PACKAGES
+
+Runtime Component:                  systemd Component:
+┌─────────────────────┐            ┌──────────────────────┐
+│ ka9q-radio.deb      │            │ ka9q-radio-systemd   │
+│                     │            │  .deb                │
+│ Contents:           │            │                      │
+│ • radiod            │            │ Contents:            │
+│ • control/monitor   │            │ • radiod@.service    │
+│ • utilities         │            │ • sysctl configs     │
+│ • configs           │            │                      │
+│ • udev rules        │            │ Depends:             │
+│                     │            │ • ka9q-radio (exact) │
+│ Depends:            │            │ • systemd            │
+│ • libfftw3-single3  │            │                      │
+│ • libopus0          │            │ Architecture: all    │
+│ • libbsd0           │            │                      │
+│ • (NO systemd)      │            │                      │
+└─────────────────────┘            └──────────────────────┘
+        ↓                                   ↓
+        │                                   │
+        ↓                                   ↓
+Works on ANY system              Only on systemd systems
+
+
+KEY FEATURES
+============
+
+✅ Build once on any system (systemd or not)
+✅ Runtime package works everywhere
+✅ Optional systemd support package
+✅ Auto-detects macOS package managers (Homebrew/MacPorts)
+✅ Supports all hardware (airspy, hackrf, rtl-sdr, etc.)
+✅ Component-based packaging (DEB/RPM/TXZ)
+✅ Professional post-install scripts
+✅ Multi-platform (Linux/FreeBSD/macOS)
+✅ Init-system agnostic
+✅ Coexists with existing Makefiles
+✅ Well documented
+
+
+PLATFORM SUPPORT
+================
+
+Linux (Debian/Ubuntu)    ✅ Full support (all init systems)
+Linux (RPM-based)        ✅ Full support (all init systems)
+FreeBSD                  ✅ Full support (rc.d integration)
+macOS                    ⚠️  Partial (client programs, auto package manager detection)
+
+
+FILE SIZE SUMMARY
+=================
+
+Documentation:
+  START_HERE.md         8.5KB  (new user introduction)
+  COMPONENT_GUIDE.md   13.0KB  (visual guide)
+  COMPONENTS.md         7.9KB  (technical details)
+  CMAKE_README.md       9.2KB  (build reference)
+  README.md             8.4KB  (file overview)
+  QUICKSTART.md         5.5KB  (integration steps)
+  INIT_SYSTEMS.md       8.0KB  (init system guide)
+  MACOS.md              5.2KB  (macOS specifics)
+
+Build System:
+  CMakeLists.txt       15.0KB  (main build config)
+
+Platform Support:
+  radiod@.service.in    0.6KB  (systemd template)
+  postinst              2.2KB  (runtime installer)
+  systemd-postinst      1.1KB  (systemd installer)
+  radiod.in             3.0KB  (FreeBSD rc.d)
+
+Total: ~88KB of documentation and build system files
+
+
+VERSION INFORMATION
+===================
+
+CMake Build System v1.0
+Created: November 2025
+Compatible with: ka9q-radio (current)
+License: GPL-3.0 (same as ka9q-radio)
+
+
+QUICK REFERENCE
+===============
+
+Build:           cmake .. && cmake --build . -j
+Package:         cpack -G DEB
+Test runtime:    radiod --help
+Test systemd:    systemctl cat radiod@
+
+Install (systemd):     dpkg -i ka9q-radio*.deb
+Install (non-systemd): dpkg -i ka9q-radio_*_amd64.deb
+
+Help: See START_HERE.md for guidance on which documents to read
