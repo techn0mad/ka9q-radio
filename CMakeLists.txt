@@ -54,13 +54,19 @@ endif()
 # Set C standard
 set(CMAKE_C_STANDARD 11)
 set(CMAKE_C_STANDARD_REQUIRED ON)
+set(CMAKE_POSITION_INDEPENDENT_CODE ON)
 set(CMAKE_C_EXTENSIONS ON)  # For GNU extensions like _GNU_SOURCE
 
 # Compiler flags
 add_compile_options(
     -Wall
+    -Wextra
     -pthread
     -funsafe-math-optimizations
+    -fno-math-errno
+    -fcx-limited-range
+    -freciprocal-math
+    -fno-trapping-math
 )
 
 # Platform-specific compiler flags
@@ -157,104 +163,28 @@ endif()
 
 # Common source files for libradio
 set(LIBRADIO_SOURCES
-    src/attr.c
     src/ax25.c
-    src/config.c
-    src/decimate.c
-    src/filter.c
-    src/misc.c
     src/morse.c
-    src/multicast.c
-    src/osc.c
-    src/radio.c
+    src/bandplan.c
+    src/dump.c
+    src/modes.c
+    src/avahi.c
+    src/avahi_browse.c
+    src/attr.c
+    src/filter.c
+    src/iir.c
+    src/decode_status.c
     src/status.c
+    src/misc.c
+    src/multicast.c
+    src/rtp.c
+    src/osc.c
+    src/config.c
 )
+
 
 # Create libradio (static for now, but could be shared)
 add_library(radio STATIC ${LIBRADIO_SOURCES})
-
-
-# ---- Driver plugins (built as MODULE and dlopened at runtime) ----
-function(add_driver name)
-  cmake_parse_arguments(DRV "" "" "SOURCES;LIBS;INCLUDES" ${ARGN})
-  add_library(${name} MODULE ${DRV_SOURCES})
-  if(DRV_INCLUDES)
-    target_include_directories(${name} PRIVATE ${DRV_INCLUDES})
-  endif()
-  target_link_libraries(${name} PRIVATE radio ${DRV_LIBS})
-  install(TARGETS ${name} LIBRARY DESTINATION ${CMAKE_INSTALL_LIBDIR}/ka9q-radio COMPONENT runtime)
-endfunction()
-
-# Airspy
-if(AIRSPY_FOUND)
-  add_driver(airspy SOURCES src/airspy.c LIBS ${AIRSPY_LIBRARIES} INCLUDES ${AIRSPY_INCLUDE_DIRS})
-endif()
-
-# AirspyHF
-if(AIRSPYHF_FOUND)
-  add_driver(airspyhf SOURCES src/airspyhf.c LIBS ${AIRSPYHF_LIBRARIES} INCLUDES ${AIRSPYHF_INCLUDE_DIRS})
-endif()
-
-# RTL-SDR
-if(RTLSDR_FOUND)
-  add_driver(rtlsdr SOURCES src/rtlsdr.c LIBS ${RTLSDR_LIBRARIES} INCLUDES ${RTLSDR_INCLUDE_DIRS})
-endif()
-
-# HackRF
-if(HACKRF_FOUND)
-  add_driver(hackrf SOURCES src/hackrf.c LIBS ${HACKRF_LIBRARIES} INCLUDES ${HACKRF_INCLUDE_DIRS})
-endif()
-
-# Funcube (needs PortAudio and libusb)
-if(PORTAUDIO_FOUND AND USB_LIBRARY AND USB_INCLUDE_DIR)
-  add_driver(funcube SOURCES src/funcube.c;src/fcd.c;src/hid-libusb.c LIBS ${PORTAUDIO_LIBRARIES} ${USB_LIBRARY} INCLUDES ${PORTAUDIO_INCLUDE_DIRS} ${USB_INCLUDE_DIR})
-endif()
-
-# RX888 (needs libusb)
-if(USB_LIBRARY AND USB_INCLUDE_DIR)
-  add_driver(rx888 SOURCES src/rx888.c;src/ezusb.c;src/hid-libusb.c LIBS ${USB_LIBRARY} INCLUDES ${USB_INCLUDE_DIR})
-endif()
-
-# SDRplay, HydraSDR, Fobos can be added similarly when their SDKs are available
-# AirspyHF
-if(AIRSPYHF_FOUND)
-  add_driver(airspyhf SOURCES src/airspyhf.c LIBS ${AIRSPYHF_LIBRARIES})
-endif()
-
-# RTL-SDR
-if(RTLSDR_FOUND)
-  add_driver(rtlsdr SOURCES src/rtlsdr.c LIBS ${RTLSDR_LIBRARIES})
-endif()
-
-# HackRF
-if(HACKRF_FOUND)
-  add_driver(hackrf SOURCES src/hackrf.c LIBS ${HACKRF_LIBRARIES})
-endif()
-
-# Funcube (uses PortAudio/libusb in source tree)
-if(PORTAUDIO_FOUND AND USB_FOUND)
-  add_driver(funcube SOURCES src/funcube.c;src/fcd.c;src/hid-libusb.c LIBS ${PORTAUDIO_LIBRARIES} ${USB_LIBRARIES})
-endif()
-
-# RX888 (needs libusb)
-if(USB_FOUND)
-  add_driver(rx888 SOURCES src/rx888.c;src/ezusb.c;src/hid-libusb.c LIBS ${USB_LIBRARIES})
-endif()
-
-# SDRplay (optional API)
-if(ENABLE_SDRPLAY AND SDRPLAY_FOUND)
-  add_driver(sdrplay SOURCES src/sdrplay.c LIBS ${SDRPLAY_LIBRARIES})
-endif()
-
-# HydraSDR (optional)
-if(ENABLE_HYDRASDR AND HYDRASDR_FOUND)
-  add_driver(hydrasdr SOURCES src/hydrasdr.c LIBS ${HYDRASDR_LIBRARIES})
-endif()
-
-# Fobos (optional)
-if(ENABLE_FOBOS AND FOBOS_FOUND)
-  add_driver(fobos SOURCES src/fobos.c LIBS ${FOBOS_LIBRARIES})
-endif()
 
 target_include_directories(radio PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/include
@@ -267,91 +197,47 @@ target_link_libraries(radio PUBLIC
     Threads::Threads
     ${MATH_LIBRARY}
 )
-if(LINUX)
-    target_link_libraries(radio PUBLIC ${AVAHI_LIBRARIES})
+
+
+# ---- Driver plugins (built as MODULE and dlopened at runtime) ----
+function(add_driver name)
+  cmake_parse_arguments(DRV "" "" "SOURCES;LIBS;INCLUDES" ${ARGN})
+  # Use an internal target name to avoid clashes with system libs
+  set(_t "${name}_drv")
+  add_library(${_t} MODULE ${DRV_SOURCES})
+  # Keep the .so/.dylib filename as "airspy", "rtlsdr", etc.
+  set_target_properties(${_t} PROPERTIES OUTPUT_NAME "${name}")
+  if(DRV_INCLUDES)
+    target_include_directories(${_t} PRIVATE ${DRV_INCLUDES})
+  endif()
+  if(DRV_LIBS)
+    target_link_libraries(${_t} PRIVATE radio ${DRV_LIBS})
+  else()
+    target_link_libraries(${_t} PRIVATE radio)
+  endif()
+  install(TARGETS ${_t}
+          LIBRARY DESTINATION ${KA9Q_LIB_DIR}
+          COMPONENT runtime)
+endfunction()
+
+if(HAVE_AIRSPY)
+  add_driver(airspy  SOURCES src/airspy.c   LIBS ${AIRSPY_LIBRARIES}   INCLUDES ${AIRSPY_INCLUDE_DIRS})
 endif()
-
-# Hardware driver sources (these will be built into radiod or as modules)
-set(DRIVER_SOURCES "")
-set(DRIVER_LIBS "")
-
-# Core drivers (always included)
-list(APPEND DRIVER_SOURCES src/sig_gen.c)
-
-if(HAVE_AIRSPY)    list(APPEND DRIVER_LIBS ${AIRSPY_LIBRARIES})
+if(HAVE_AIRSPYHF)
+  add_driver(airspyhf SOURCES src/airspyhf.c LIBS ${AIRSPYHF_LIBRARIES} INCLUDES ${AIRSPYHF_INCLUDE_DIRS})
 endif()
-
-if(HAVE_AIRSPYHF)    list(APPEND DRIVER_LIBS ${AIRSPYHF_LIBRARIES})
+if(HAVE_RTLSDR)
+  add_driver(rtlsdr  SOURCES src/rtlsdr.c   LIBS ${RTLSDR_LIBRARIES}   INCLUDES ${RTLSDR_INCLUDE_DIRS})
 endif()
-
-if(HAVE_RTLSDR)    list(APPEND DRIVER_LIBS ${RTLSDR_LIBRARIES})
+if(HAVE_HACKRF)
+  add_driver(hackrf  SOURCES src/hackrf.c   LIBS ${HACKRF_LIBRARIES}   INCLUDES ${HACKRF_INCLUDE_DIRS})
 endif()
-
-if(HAVE_HACKRF)    list(APPEND DRIVER_LIBS ${HACKRF_LIBRARIES})
+if(PORTAUDIO_FOUND AND USB_LIBRARY AND USB_INCLUDE_DIR)
+  add_driver(funcube SOURCES src/funcube.c;src/fcd.c;src/hid-libusb.c LIBS ${PORTAUDIO_LIBRARIES} ${USB_LIBRARY} INCLUDES ${PORTAUDIO_INCLUDE_DIRS} ${USB_INCLUDE_DIR})
 endif()
-
-# Main daemon: radiod
-add_executable(radiod
-  src/main.c
-  src/audio.c src/fm.c src/wfm.c src/linear.c src/spectrum.c
-  src/radio.c src/radio_status.c src/rtcp.c
-  src/fcd.c src/hid-libusb.c
-)
-target_link_libraries(radiod PRIVATE
-    radio
-    ${OPUS_LIBRARIES}
-    ${INIPARSER_LIBRARIES}
-    ${DRIVER_LIBS}
-)
-if(USB_LIBRARY)
-    target_link_libraries(radiod PRIVATE ${USB_LIBRARY})
+if(USB_LIBRARY AND USB_INCLUDE_DIR)
+  add_driver(rx888   SOURCES src/rx888.c;src/ezusb.c;src/hid-libusb.c LIBS ${USB_LIBRARY} INCLUDES ${USB_INCLUDE_DIR})
 endif()
-
-# Client programs
-add_executable(control src/control.c)
-target_link_libraries(control PRIVATE radio ${NCURSES_LIBRARIES})
-
-add_executable(monitor src/monitor.c)
-target_link_libraries(monitor PRIVATE radio)
-if(PORTAUDIO_FOUND)
-    target_link_libraries(monitor PRIVATE ${PORTAUDIO_LIBRARIES})
-endif()
-if(ALSA_FOUND)
-    target_link_libraries(monitor PRIVATE ${ALSA_LIBRARIES})
-endif()
-
-# Utility programs
-add_executable(pcmrecord src/pcmrecord.c)
-target_link_libraries(pcmrecord PRIVATE radio)
-
-add_executable(pcmplay src/pcmplay.c)
-target_link_libraries(pcmplay PRIVATE radio)
-
-add_executable(opussend src/opussend.c)
-target_link_libraries(opussend PRIVATE radio ${OPUS_LIBRARIES})
-
-add_executable(metadump src/metadump.c)
-target_link_libraries(metadump PRIVATE radio)
-
-# Optional programs based on available libraries
-if(OGG_FOUND)
-    add_executable(oggrecord src/oggrecord.c)
-    target_link_libraries(oggrecord PRIVATE radio ${OPUS_LIBRARIES} ${OGG_LIBRARIES})
-endif()
-
-# Installation rules
-install(TARGETS radiod DESTINATION ${KA9Q_SBIN_DIR} COMPONENT runtime)
-
-install(TARGETS
-    control
-    monitor
-    pcmrecord
-    pcmplay
-    opussend
-    metadump
-    DESTINATION ${KA9Q_BIN_DIR}
-    COMPONENT runtime
-)
 
 if(TARGET oggrecord)
     install(TARGETS oggrecord DESTINATION ${KA9Q_BIN_DIR} COMPONENT runtime)
@@ -571,3 +457,67 @@ elseif(MACOS)
 endif()
 
 include(CPack)
+
+add_executable(control src/control.c)
+target_link_libraries(control PRIVATE radio ${INIPARSER_LIBRARIES} ${NCURSES_LIBRARIES})
+
+add_executable(packetd src/packetd.c)
+target_link_libraries(packetd PRIVATE radio)
+
+add_executable(fft-gen src/fft-gen.c)
+target_link_libraries(fft-gen PRIVATE radio ${FFTW3F_LIBRARIES})
+
+add_executable(pl src/pl.c)
+target_link_libraries(pl PRIVATE radio ${FFTW3F_LIBRARIES})
+
+add_executable(powers src/powers.c)
+target_link_libraries(powers PRIVATE radio)
+
+add_executable(tune src/tune.c)
+target_link_libraries(tune PRIVATE radio)
+
+add_executable(show-sig src/show-sig.c)
+target_link_libraries(show-sig PRIVATE radio ${NCURSES_LIBRARIES})
+
+add_executable(show-pkt src/show-pkt.c)
+target_link_libraries(show-pkt PRIVATE radio ${NCURSES_LIBRARIES})
+
+add_executable(rdsd src/rdsd.c)
+target_link_libraries(rdsd PRIVATE radio ${FFTW3F_LIBRARIES})
+
+add_executable(stereod src/stereod.c)
+target_link_libraries(stereod PRIVATE radio)
+
+add_executable(jt-decoded src/jt-decoded.c)
+target_link_libraries(jt-decoded PRIVATE radio)
+
+add_executable(wd-record src/wd-record.c)
+target_link_libraries(wd-record PRIVATE radio)
+
+add_executable(cwd src/cwd.c)
+target_link_libraries(cwd PRIVATE radio)
+
+add_executable(pcmcat src/pcmcat.c)
+target_link_libraries(pcmcat PRIVATE radio)
+
+add_executable(pcmspawn src/pcmspawn.c)
+target_link_libraries(pcmspawn PRIVATE radio)
+
+add_executable(sig-gen src/sig_gen.c)
+target_link_libraries(sig-gen PRIVATE radio)
+
+# Always install the daemon if present
+if(TARGET radiod)
+  install(TARGETS radiod DESTINATION ${KA9Q_SBIN_DIR} COMPONENT runtime)
+endif()
+
+# Binaries: install only those that exist
+foreach(_t IN ITEMS
+  control monitor pcmrecord pcmplay opussend metadump
+  fft-gen pl powers tune show-sig show-pkt rdsd stereod
+  jt-decoded wd-record cwd pcmcat pcmspawn sig-gen packetd)
+  if(TARGET ${_t})
+    install(TARGETS ${_t} DESTINATION ${KA9Q_BIN_DIR} COMPONENT runtime)
+  endif()
+endforeach()
+
