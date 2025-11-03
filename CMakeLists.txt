@@ -12,6 +12,8 @@ option(ENABLE_BLADERF "Enable BladeRF support" OFF)
 option(ENABLE_HACKRF "Enable HackRF support" ON)
 option(ENABLE_HYDRASDR "Enable HydraSDR support" OFF)
 
+add_compile_definitions(_GNU_SOURCE=1)
+
 # Platform detection
 if(CMAKE_SYSTEM_NAME STREQUAL "Linux")
     set(LINUX TRUE)
@@ -227,6 +229,15 @@ target_link_libraries(radio PUBLIC
     ${MATH_LIBRARY}
 )
 
+# FFTW threads library (needed for fftwf_*_with_nthreads, fftwf_init_threads)
+find_library(FFTW3F_THREADS_LIBRARY NAMES fftw3f_threads)
+
+if(FFTW3F_THREADS_LIBRARY)
+  target_link_libraries(radio PUBLIC ${FFTW3F_THREADS_LIBRARY})
+  target_compile_definitions(radio PUBLIC HAVE_FFTW_THREADS=1)
+else()
+  message(WARNING "fftw3f_threads not found; builds using FFTW threading will fail to link on some targets.")
+endif()
 
 # ---- Driver plugins (built as MODULE and dlopened at runtime) ----
 function(add_driver name)
