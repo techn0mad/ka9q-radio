@@ -86,7 +86,36 @@ find_package(PkgConfig REQUIRED)
 pkg_check_modules(FFTW3F REQUIRED fftw3f)
 pkg_check_modules(OPUS REQUIRED opus)
 pkg_check_modules(BSD REQUIRED libbsd)
-pkg_check_modules(INIPARSER REQUIRED iniparser)
+
+# --- iniparser: try pkg-config names first, then fallback ---
+if(PKG_CONFIG_FOUND)
+  pkg_search_module(INIPARSER QUIET iniparser iniparser4)
+endif()
+
+if(NOT INIPARSER_FOUND)
+  # Ubuntu Jammy's libiniparser-dev has no .pc; find headers/libs directly
+  find_path(INIPARSER_INCLUDE_DIR NAMES iniparser.h
+            PATHS /usr/include /usr/local/include)
+  # Library is usually libiniparser.so
+  find_library(INIPARSER_LIBRARY  NAMES iniparser
+               PATHS /usr/lib /usr/lib/x86_64-linux-gnu /usr/local/lib)
+  if(INIPARSER_INCLUDE_DIR AND INIPARSER_LIBRARY)
+    set(INIPARSER_FOUND TRUE)
+    set(INIPARSER_INCLUDE_DIRS ${INIPARSER_INCLUDE_DIR})
+    set(INIPARSER_LIBRARIES    ${INIPARSER_LIBRARY})
+  endif()
+endif()
+
+if(INIPARSER_FOUND)
+  add_library(Iniparser::iniparser INTERFACE IMPORTED)
+  set_target_properties(Iniparser::iniparser PROPERTIES
+    INTERFACE_INCLUDE_DIRECTORIES "${INIPARSER_INCLUDE_DIRS}"
+    INTERFACE_LINK_LIBRARIES      "${INIPARSER_LIBRARIES}"
+  )
+else()
+  message(STATUS "iniparser not found via pkg-config; looked for headers/libs directly.
+  On Ubuntu/Debian install: sudo apt-get install libiniparser-dev")
+endif()
 
 # Find other required libraries
 find_package(Threads REQUIRED)
@@ -458,8 +487,11 @@ endif()
 
 include(CPack)
 
-add_executable(control src/control.c)
-target_link_libraries(control PRIVATE radio ${INIPARSER_LIBRARIES} ${NCURSES_LIBRARIES})
+# tools that require iniparser (e.g., control)
+if(INIPARSER_FOUND AND NCURSES_FOUND)
+  add_executable(control src/control.c)
+  target_link_libraries(control PRIVATE radio Iniparser::iniparser ${NCURSES_LIBRARIES})
+endif()
 
 add_executable(packetd src/packetd.c)
 target_link_libraries(packetd PRIVATE radio)
