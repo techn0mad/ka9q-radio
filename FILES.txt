@@ -1,0 +1,535 @@
+.
+├── aux                              # Auxiliary system configuration and helper scripts
+│   ├── 50-multicast.conf            # sysctl: enable IP multicast on Linux boot
+│   ├── 98-sockbuf.conf              # sysctl: increase socket buffer sizes for high-rate multicast
+│   ├── airspy-blacklist.conf        # modprobe blacklist: prevent kernel claiming Airspy so userspace can
+│   ├── aprsfeed.rotate              # logrotate config for aprsfeed daemon logs
+│   ├── ft4.rotate                   # logrotate config for FT4 decoder logs
+│   ├── ft8.rotate                   # logrotate config for FT8 decoder logs
+│   ├── hfdl.rotate                  # logrotate config for HFDL decoder logs
+│   ├── ka9q-cleanups                # systemd service: post-boot cleanup tasks
+│   ├── ka9q-radio-setup             # initial system setup script (users, dirs, permissions)
+│   ├── ka9q-radio.tmpfiles          # systemd-tmpfiles: create /var/lib, /var/log, /run dirs at boot
+│   ├── Makefile                     # installs aux/ files to system locations
+│   ├── purge.sh                     # remove ka9q-radio installation and configuration
+│   ├── radio.sysusers               # systemd-sysusers: create 'radio' system user and group
+│   ├── recordings.rotate            # logrotate config for pcmrecord recording logs
+│   ├── RPi-compile                  # build script optimised for Raspberry Pi (native compile flags)
+│   ├── set_lo_multicast             # enable multicast on loopback interface (required for local testing)
+│   ├── start-hfdl                   # helper script to start HFDL (HF Data Link) decoder pipeline
+│   ├── start-ka9q-horus             # helper script to start Project Horus balloon telemetry pipeline
+│   ├── systable.conf                # station/receiver table: lat/lon and other site parameters
+│   └── wspr.rotate                  # logrotate config for WSPR decoder logs
+├── build                            # CMake out-of-tree build directory (generated; not committed)
+│   ├── CMakeCache.txt               # CMake variable cache from last cmake configure run
+│   └── CMakeFiles                   # CMake internal files (compiler detection, dependency tracking)
+│       ├── 4.1.2
+│       │   ├── CMakeCCompiler.cmake
+│       │   ├── CMakeDetermineCompilerABI_C.bin
+│       │   ├── CMakeSystem.cmake
+│       │   └── CompilerIdC
+│       │       ├── a.out
+│       │       ├── apple-sdk.c
+│       │       ├── CMakeCCompilerId.c
+│       │       └── tmp
+│       ├── 4.3.4
+│       │   ├── CMakeCCompiler.cmake
+│       │   ├── CMakeDetermineCompilerABI_C.bin
+│       │   ├── CMakeSystem.cmake
+│       │   └── CompilerIdC
+│       │       ├── a.out
+│       │       ├── apple-sdk.c
+│       │       ├── CMakeCCompilerId.c
+│       │       └── tmp
+│       ├── cmake.check_cache
+│       ├── CMakeConfigureLog.yaml
+│       └── pkgRedirects
+├── CLAUDE.md                        # Claude Code session context for this fork (not upstream)
+├── config                           # Default and example runtime configuration files
+│   ├── aprs.conf                    # APRS daemon: TNC port, passcode, server settings
+│   ├── examples                     # Example configs: site-specific and generic starting points
+│   │   ├── fragments                # Reusable channel/mode snippets included by full configs
+│   │   │   ├── 10mfm.conf           # 10m FM channels fragment
+│   │   │   ├── 125cm-socal-FM.conf  # 23cm Southern California FM channels fragment
+│   │   │   ├── 60m.conf             # 60m band channels fragment
+│   │   │   ├── 6mfm.conf            # 6m FM channels fragment
+│   │   │   ├── 70cm-socal-FM.conf   # 70cm Southern California FM channels fragment
+│   │   │   ├── airspy-noptc-125cm.conf
+│   │   │   ├── airspy-region2-70cmFM.conf
+│   │   │   ├── airspy.conf          # Airspy hardware section fragment
+│   │   │   ├── cb.conf              # CB radio channels fragment
+│   │   │   ├── chp.conf             # CHP (California Highway Patrol) channels fragment
+│   │   │   ├── freedv.conf          # FreeDV digital voice channels fragment
+│   │   │   ├── ft4.conf             # FT4 digital mode channels fragment
+│   │   │   ├── ft8-individual.conf  # FT8 individual band channels fragment
+│   │   │   ├── ft8.conf             # FT8 digital mode channels fragment
+│   │   │   ├── hfdl-sep.conf        # HFDL separate-channel fragment
+│   │   │   ├── hfdl.conf            # HFDL (HF Data Link) channels fragment
+│   │   │   ├── ibp.conf             # International Beacon Project channels fragment
+│   │   │   ├── rx888.conf           # RX888 hardware section fragment
+│   │   │   ├── sig-gen.conf         # Signal generator hardware section fragment
+│   │   │   ├── socal-2mFM.conf      # 2m Southern California FM channels fragment
+│   │   │   ├── test.conf            # Minimal test/development config fragment
+│   │   │   ├── w1aw.conf            # ARRL W1AW station channels fragment
+│   │   │   ├── wspr.conf            # WSPR (Weak Signal Propagation Reporter) channels fragment
+│   │   │   └── wwf.conf             # WWV/WWVH time standard channels fragment
+│   │   ├── radiod@airspy-autorx.conf        # Airspy R2: radiosonde auto-rx config
+│   │   ├── radiod@airspy-generic.conf       # Airspy R2: generic starting-point config
+│   │   ├── radiod@airspy-kq6rs-70cm.conf    # Airspy R2: KQ6RS 70cm band config
+│   │   ├── radiod@airspy-sonde.conf         # Airspy R2: radiosonde (weather balloon) config
+│   │   ├── radiod@airspy-toro-sonde.conf    # Airspy R2: Toro Peak radiosonde config
+│   │   ├── radiod@airspyhf-generic.conf     # Airspy HF+: generic starting-point config
+│   │   ├── radiod@airspyhf-ka9q.conf        # Airspy HF+: KA9Q personal config
+│   │   ├── radiod@aviation.conf             # Aviation VHF AM band config
+│   │   ├── radiod@dp0gvn.conf.d             # DP0GVN station: split config directory
+│   │   │   ├── 00-global-dp0gvn.conf
+│   │   │   ├── 01-rx888-dp0gvn.conf
+│   │   │   ├── 02-wspr.conf
+│   │   │   ├── 10-wwv.conf
+│   │   │   ├── 39-ft4.conf
+│   │   │   ├── 39-ft8-wide.conf
+│   │   │   ├── 51-hfdl.conf
+│   │   │   └── ft8.conf
+│   │   ├── radiod@fm.conf                   # Broadcast FM band config
+│   │   ├── radiod@fobos-generic.conf        # Rigexpert Fobos SDR generic config
+│   │   ├── radiod@funcube-generic.conf      # FUNcube Dongle Pro+ generic config
+│   │   ├── radiod@funcube-ka9q.conf         # FUNcube Dongle Pro+: KA9Q personal config
+│   │   ├── radiod@horus.conf                # Project Horus balloon telemetry config
+│   │   ├── radiod@ka9q-125cm.conf.d         # KA9Q 23cm station: split config directory
+│   │   │   ├── 00-ka9q-125cm-global.conf
+│   │   │   ├── 01-airspy.conf
+│   │   │   └── 02-125cm-channels.conf
+│   │   ├── radiod@ka9q-2m.conf.d            # KA9Q 2m station: split config directory
+│   │   │   ├── 00-ka9q-2m-global.conf
+│   │   │   ├── 01-airspy.conf
+│   │   │   └── 02-2m-channels.conf
+│   │   ├── radiod@ka9q-70cm.conf.d          # KA9Q 70cm station: split config directory
+│   │   │   ├── 00-global.conf
+│   │   │   ├── 01-airspy.conf
+│   │   │   └── 02-channels.conf
+│   │   ├── radiod@ka9q-fobos.conf.d         # KA9Q Fobos station: split config directory
+│   │   │   ├── 00-global.conf
+│   │   │   ├── 02-fobos.conf
+│   │   │   ├── 03-aviation.conf
+│   │   │   ├── 04-aviation-raster.conf
+│   │   │   └── 05-acars.conf
+│   │   ├── radiod@ka9q-hf.conf.d            # KA9Q HF station (RX888): split config directory
+│   │   │   ├── chp.conf
+│   │   │   ├── fm.conf
+│   │   │   ├── fmt.conf
+│   │   │   ├── freedv.conf
+│   │   │   ├── ft4.conf
+│   │   │   ├── ft8-big.conf.disabled
+│   │   │   ├── ft8.conf
+│   │   │   ├── hfdl.conf
+│   │   │   ├── ka9q-hf-global.conf
+│   │   │   ├── pinball.conf
+│   │   │   ├── rx888.conf
+│   │   │   ├── wspr.conf
+│   │   │   └── wwv.conf
+│   │   ├── radiod@kfs-nw.conf.d             # KFS NW antenna: split config directory
+│   │   │   ├── 00-kfs-nw-global.conf
+│   │   │   ├── 01-kfs-nw-rx888.conf
+│   │   │   ├── 02-kfs-nw-wspr.conf
+│   │   │   ├── 05-kfs-nw-wwv.conf
+│   │   │   ├── 06-kfs-nw-superdarn.conf-disabled
+│   │   │   ├── 07-kfs-nw-n6nc.conf-disabled
+│   │   │   ├── 39-ft4.conf
+│   │   │   ├── 39-ft8-wide.conf
+│   │   │   ├── 51-hfdl.conf
+│   │   │   ├── ft8.conf
+│   │   │   ├── kfs-nw-websdr.conf-disable
+│   │   │   └── radiod@kfs-nw.conf
+│   │   ├── radiod@kfs-omni.conf.d           # KFS omni antenna: split config directory
+│   │   │   ├── 00-global.conf
+│   │   │   ├── 01-rx888.conf
+│   │   │   ├── 02-kfs-omni-wspr.conf
+│   │   │   ├── 05-kfs-omni-wwv.conf
+│   │   │   ├── 07-websdr.conf
+│   │   │   ├── 09-superdarn.conf
+│   │   │   ├── 10-n6nc.conf
+│   │   │   ├── 11-atc.conf
+│   │   │   ├── 39-ft4.conf
+│   │   │   ├── 39-ft8-wide.conf-disabled
+│   │   │   ├── 50-hfdl.con-disabled
+│   │   │   ├── 51-hfdl.conf
+│   │   │   ├── ft8.conf
+│   │   │   └── pinball.conf
+│   │   ├── radiod@kfs-se.conf.d             # KFS SE antenna: split config directory
+│   │   │   ├── 00-kfs-se-global.conf
+│   │   │   ├── 01-kfs-se-rx888.conf
+│   │   │   ├── 02-kfs-se-wspr.conf
+│   │   │   ├── 04-kfs-se-wwv.conf
+│   │   │   ├── 06-kfs-se-websdr.conf-disabled
+│   │   │   ├── 07-kfs-se-superdarn.conf-disabled
+│   │   │   ├── 39-ft4.conf
+│   │   │   ├── 39-ft8-wide.conf
+│   │   │   ├── 51-hfdl.conf
+│   │   │   ├── fmt.conf
+│   │   │   └── ft8.conf
+│   │   ├── radiod@kfs-sw.conf.d             # KFS SW antenna: split config directory
+│   │   │   ├── 00-kfs-sw-global.conf
+│   │   │   ├── 01-kfs-sw-rx888.conf
+│   │   │   ├── 02-kfs-sw-wspr.conf
+│   │   │   ├── 05-kfs-sw-wwv.conf
+│   │   │   ├── 06-kfs-sw-websdr.conf-disabled
+│   │   │   ├── 07-kfs-sw-superdarn.conf-disabled
+│   │   │   ├── 39-ft4.conf
+│   │   │   ├── 39-ft8-wide.conf
+│   │   │   ├── 51-hfdl.conf
+│   │   │   └── ft8.conf
+│   │   ├── radiod@kph1.conf                 # KPH station single-file config
+│   │   ├── radiod@kph1.conf.d               # KPH station: split config directory
+│   │   │   ├── 00-global.conf
+│   │   │   ├── 01-rx888.conf
+│   │   │   ├── 02-wspr.conf
+│   │   │   ├── 03-websdr.conf
+│   │   │   ├── 04-wwv.conf
+│   │   │   ├── 05-ft8.conf
+│   │   │   ├── 06-ft4.conf
+│   │   │   ├── 07-n6nc.conf
+│   │   │   ├── 09-superdarn.conf
+│   │   │   ├── 50-hfdl-oldversion.conf.disabled
+│   │   │   └── 51-hfdl.conf-disabled
+│   │   ├── radiod@kph2.conf.d               # KPH2 station: split config directory
+│   │   │   ├── 00-global.conf
+│   │   │   ├── 01-rx888.conf
+│   │   │   ├── 07-n6nc.conf
+│   │   │   ├── 10-wspr.conf
+│   │   │   ├── 11-ft8.conf-disabled
+│   │   │   ├── 12-ft4.conf
+│   │   │   ├── 13-wwv.conf
+│   │   │   ├── 14-websdr.conf.disabled
+│   │   │   ├── 16-superdarn.conf
+│   │   │   ├── 20-hfdl.conf-disabled
+│   │   │   ├── 39-ft8-wide.conf
+│   │   │   ├── 51-hfdl.conf
+│   │   │   ├── fmt.conf
+│   │   │   └── ft8.conf
+│   │   ├── radiod@kq6rs.conf                # KQ6RS station config
+│   │   ├── radiod@nws.conf                  # NWS (NOAA Weather Radio) receive config
+│   │   ├── radiod@repeater.conf             # Amateur repeater controller config
+│   │   ├── radiod@rx888-generic.conf        # RX888 Mk II: generic starting-point config
+│   │   ├── radiod@rx888-oe9ghv.conf         # RX888: OE9GHV station config
+│   │   ├── radiod@rx888-oe9ghv2.conf        # RX888: OE9GHV second receiver config
+│   │   ├── radiod@rx888-wsprdaemon.conf     # RX888: wsprdaemon integration config
+│   │   ├── radiod@rx888-wsprdaemon.conf.d   # RX888 wsprdaemon: split config directory
+│   │   │   ├── 00-global.conf
+│   │   │   ├── 01-rx888.conf
+│   │   │   ├── 07-n6nc.conf
+│   │   │   ├── 10-wspr.conf
+│   │   │   ├── 11-ft8.conf-disabled
+│   │   │   ├── 12-ft4.conf
+│   │   │   ├── 13-wwv.conf
+│   │   │   ├── 14-websdr.conf.disabled
+│   │   │   ├── 16-superdarn.conf
+│   │   │   ├── 20-hfdl.conf-disabled
+│   │   │   ├── 39-ft8-wide.conf
+│   │   │   └── 51-hfdl.conf
+│   │   ├── radiod@sdrplay-generic.conf      # SDRplay RSP: generic starting-point config
+│   │   ├── radiod@sdrplay-iq.conf           # SDRplay RSP: raw IQ output config
+│   │   ├── radiod@sdrplay-ka9q.conf         # SDRplay RSP: KA9Q personal config
+│   │   ├── radiod@sdrplay-wspr-20m.conf     # SDRplay RSP: 20m WSPR dedicated config
+│   │   ├── radiod@siggen.conf               # Signal generator (no hardware): used for testing
+│   │   ├── radiod@vy0erc.conf.d             # VY0ERC station: split config directory
+│   │   │   ├── 00-global-vy0erc.conf
+│   │   │   ├── 01-rx888-vy0erc.conf
+│   │   │   ├── 37-wspr.conf
+│   │   │   ├── 39-ft4.conf
+│   │   │   ├── 39-ft8-wide.conf
+│   │   │   ├── 51-hfdl.conf
+│   │   │   ├── 55-wwv.conf
+│   │   │   └── ft8.conf
+│   │   ├── recordings@aviation.conf         # pcmrecord: aviation VHF recording config
+│   │   ├── recordings@cactus.conf           # pcmrecord: Cactus Link repeater recording config
+│   │   ├── recordings@darn.conf             # pcmrecord: DARN network recording config
+│   │   ├── recordings@fm.conf               # pcmrecord: FM broadcast recording config
+│   │   ├── recordings@papa.conf             # pcmrecord: PAPA repeater system recording config
+│   │   ├── recordings@pictures.conf         # pcmrecord: Pictures repeater recording config
+│   │   ├── recordings@wins.conf             # pcmrecord: WINS news radio recording config
+│   │   └── recordings@wwv.conf              # pcmrecord: WWV time signal recording config
+│   ├── ft4-decode.conf                      # ft4-decode daemon: WSJT-X FT4 decoder settings
+│   ├── ft8-decode.conf                      # ft8-decode daemon: WSJT-X FT8 decoder settings
+│   ├── hfdl.conf                            # hfdl daemon: HF Data Link decoder settings
+│   ├── horus.conf                           # horusdemod: Project Horus 4FSK telemetry settings
+│   ├── Makefile                             # installs config files to /etc/radio
+│   ├── packetd.conf                         # packetd: AX.25 packet radio daemon settings
+│   ├── README                               # config directory documentation
+│   ├── repeater.conf                        # repeater controller settings
+│   ├── rx888_bootfile.conf                  # RX888 firmware path configuration
+│   └── wspr-decode.conf                     # wspr-decode daemon: WSPR decoder settings
+├── debian                                   # Debian package build infrastructure
+│   ├── changelog                            # Debian package version/changelog history
+│   ├── control                              # Package metadata: deps, descriptions, sub-packages
+│   ├── copyright                            # DEP-5 machine-readable copyright/license file
+│   ├── gbp.conf                             # git-buildpackage tool configuration
+│   ├── ka9q-radio-airspy.install            # file list: Airspy sub-package
+│   ├── ka9q-radio-airspy.postinst           # post-install script: Airspy sub-package
+│   ├── ka9q-radio-airspyhf.install          # file list: Airspy HF+ sub-package
+│   ├── ka9q-radio-airspyhf.postinst         # post-install script: Airspy HF+ sub-package
+│   ├── ka9q-radio-bladerf.install           # file list: BladeRF sub-package
+│   ├── ka9q-radio-common.install            # file list: common (core) sub-package
+│   ├── ka9q-radio-common.postinst           # post-install script: common sub-package
+│   ├── ka9q-radio-common.preinst            # pre-install script: common sub-package
+│   ├── ka9q-radio-common.tmpfiles           # tmpfiles.d config for common sub-package
+│   ├── ka9q-radio-config-examples.install   # file list: example configs sub-package
+│   ├── ka9q-radio-config-examples.postinst  # post-install script: example configs
+│   ├── ka9q-radio-control.install           # file list: control program sub-package
+│   ├── ka9q-radio-control.postinst          # post-install script: control program
+│   ├── ka9q-radio-fobos.install             # file list: Rigexpert Fobos sub-package
+│   ├── ka9q-radio-ft.install                # file list: FT8/FT4 decoder sub-package
+│   ├── ka9q-radio-ft.postinst               # post-install script: FT8/FT4 sub-package
+│   ├── ka9q-radio-ft.tmpfiles               # tmpfiles.d config for FT8/FT4 sub-package
+│   ├── ka9q-radio-funcube.install           # file list: FUNcube Dongle sub-package
+│   ├── ka9q-radio-funcube.postinst          # post-install script: FUNcube Dongle
+│   ├── ka9q-radio-hackrf.install            # file list: HackRF sub-package
+│   ├── ka9q-radio-hackrf.postinst           # post-install script: HackRF
+│   ├── ka9q-radio-hfdl.install              # file list: HFDL decoder sub-package
+│   ├── ka9q-radio-hfdl.postinst             # post-install script: HFDL decoder
+│   ├── ka9q-radio-hfdl.tmpfiles             # tmpfiles.d config for HFDL sub-package
+│   ├── ka9q-radio-horus.install             # file list: Horus telemetry sub-package
+│   ├── ka9q-radio-horus.postinst            # post-install script: Horus telemetry
+│   ├── ka9q-radio-hydrasdr.install          # file list: HydraSDR sub-package
+│   ├── ka9q-radio-hydrasdr.postinst         # post-install script: HydraSDR
+│   ├── ka9q-radio-monitor.install           # file list: monitor program sub-package (x86_64)
+│   ├── ka9q-radio-monitor.install.arm64     # file list: monitor program sub-package (arm64)
+│   ├── ka9q-radio-monitor.postinst          # post-install script: monitor program
+│   ├── ka9q-radio-packet.install            # file list: AX.25 packet sub-package
+│   ├── ka9q-radio-packet.postinst           # post-install script: AX.25 packet
+│   ├── ka9q-radio-recordings.install        # file list: pcmrecord recordings sub-package
+│   ├── ka9q-radio-recordings.postinst       # post-install script: recordings
+│   ├── ka9q-radio-recordings.tmpfiles       # tmpfiles.d config for recordings sub-package
+│   ├── ka9q-radio-rtlsdr.install            # file list: RTL-SDR sub-package
+│   ├── ka9q-radio-rtlsdr.postinst           # post-install script: RTL-SDR
+│   ├── ka9q-radio-rx888.install             # file list: RX888 Mk II sub-package
+│   ├── ka9q-radio-rx888.postinst            # post-install script: RX888 Mk II
+│   ├── ka9q-radio-sdrplay.install-disabled  # file list: SDRplay (disabled; proprietary API)
+│   ├── ka9q-radio-siggen.install            # file list: signal generator sub-package
+│   ├── ka9q-radio-tools.install             # file list: utility tools sub-package
+│   ├── ka9q-radio.config                    # debconf configuration script
+│   ├── ka9q-radio.install                   # file list: top-level meta-package
+│   ├── ka9q-radio.postinst                  # post-install script: meta-package
+│   ├── ka9q-radio.postrm                    # post-removal cleanup script
+│   ├── ka9q-radio.templates                 # debconf user-prompt templates
+│   ├── ka9q-radio.tmpfiles                  # tmpfiles.d config for meta-package
+│   ├── not-installed                        # explicit list of build artifacts not to package
+│   └── rules                                # debian/rules: dpkg-buildpackage build instructions
+├── docs                                     # Documentation: man pages, markdown guides, presentations
+│   ├── 2022-Dayton-talk.odp                 # Dayton Hamvention 2022 presentation (LibreOffice Impress)
+│   ├── aprs.1                               # man page: aprs daemon
+│   ├── aprsfeed.8                           # man page: aprsfeed daemon
+│   ├── control.1                            # man page: control program
+│   ├── ctcss.1                              # man page: CTCSS encoder/decoder
+│   ├── cwd.1                                # man page: CW (Morse) decoder daemon
+│   ├── fft-gen.1                            # man page: FFT wisdom generation utility
+│   ├── FFTW3.md                             # notes on FFTW3 usage, wisdom files, and tuning
+│   ├── ft8.md                               # FT8 digital mode integration guide
+│   ├── hfdl.md                              # HFDL (HF Data Link) decoder integration guide
+│   ├── INSTALL.md                           # installation instructions
+│   ├── jt-decoded.1                         # man page: JT/FT decoded message processor
+│   ├── KA9Q-AGC.md                          # automatic gain control design notes
+│   ├── ka9q-api.md                          # metadata/control protocol API reference
+│   ├── ka9q-radio-2.md                      # design document: version 2 architecture
+│   ├── ka9q-radio-3.md                      # design document: version 3 architecture
+│   ├── ka9q-radio-commands.numbers          # command reference spreadsheet (Apple Numbers)
+│   ├── ka9q-radio-commands.pdf              # command reference (PDF export)
+│   ├── ka9q-radio.md                        # main user documentation
+│   ├── Makefile                             # builds/installs man pages
+│   ├── metadump.1                           # man page: metadump utility
+│   ├── monitor.1                            # man page: monitor audio program
+│   ├── NETWORK-NOTES.md                     # IP multicast networking notes and troubleshooting
+│   ├── noise.md                             # noise figure and sensitivity design notes
+│   ├── notes.md                             # miscellaneous developer/design notes
+│   ├── opussend.1                           # man page: opussend utility
+│   ├── packetd.8                            # man page: packetd daemon
+│   ├── pcmrecord.1                          # man page: pcmrecord utility
+│   ├── pcmsend.1                            # man page: pcmsend utility
+│   ├── powers.1                             # man page: powers signal measurement utility
+│   ├── presets.conf.md                      # documentation for presets.conf format
+│   ├── radiod.8                             # man page: radiod daemon
+│   ├── Realtime Multicast for SDR Interconnect - Phil Karn.pdf   # IETF/conference paper
+│   ├── Realtime Multicast for SDR Interconnection - Phil Karn.pdf # conference paper (alternate)
+│   ├── SDR                                  # Per-hardware SDR documentation
+│   │   ├── airspy.md                        # Airspy R2 setup and configuration guide
+│   │   ├── bladerf.md                       # BladeRF setup and configuration guide
+│   │   ├── fobos.md                         # Rigexpert Fobos setup and configuration guide
+│   │   ├── funcube.md                       # FUNcube Dongle Pro+ setup guide
+│   │   ├── hackrf.md                        # HackRF One setup and configuration guide
+│   │   ├── hydrasdr.md                      # HydraSDR setup and configuration guide
+│   │   ├── rtlsdr.md                        # RTL-SDR dongle setup and configuration guide
+│   │   ├── rx888.md                         # RX888 Mk II setup and configuration guide
+│   │   └── sdrplay.md                       # SDRplay RSP setup and configuration guide
+│   ├── sig_gen.md                           # signal generator (sig_gen) usage guide
+│   ├── The KA9Q-Radio Package - Phil Karn.pdf  # overview presentation/paper
+│   ├── tune.1                               # man page: tune channel frequency utility
+│   ├── utils                                # User-facing utility documentation
+│   │   ├── control.md                       # control program user guide
+│   │   ├── monitor.md                       # monitor program user guide
+│   │   └── pcmrecord.md                     # pcmrecord user guide
+│   └── wd-record.1                          # man page: wd-record wideband recorder
+├── FILES.txt                                # this file: annotated directory tree
+├── ka9q-radio.asc                           # PGP-signed apt repository key (ASCII-armored)
+├── ka9q-sources.list                        # apt sources.list entry for ka9q-radio package repo
+├── LICENSE.TXT                              # software license
+├── Makefile                                 # top-level makefile: delegates to src/ aux/ share/ service/ docs/
+├── README.md                                # main project README and overview
+├── rules                                    # udev rules for SDR hardware USB device permissions
+│   ├── 20-rtlsdr.rules                      # RTL-SDR: grant non-root USB access
+│   ├── 51-airspy.rules                      # Airspy R2: grant non-root USB access
+│   ├── 51-hydrasdr.rules                    # HydraSDR (rfone): grant non-root USB access
+│   ├── 52-airspyhf.rules                    # Airspy HF+: grant non-root USB access
+│   ├── 53-airspy-ka9q.rules                 # Airspy R2: KA9Q-specific USB permissions
+│   ├── 66-hackrf.rules                      # HackRF One: grant non-root USB access
+│   ├── 66-sdrplay.rules                     # SDRplay RSP: grant non-root USB access
+│   ├── 68-funcube-dongle-proplus.rules      # FUNcube Dongle Pro+: USB permissions
+│   ├── 68-funcube-dongle.rules              # FUNcube Dongle original: USB permissions
+│   ├── 69-funcube-ka9q.rules                # FUNcube Dongle: KA9Q-specific permissions
+│   ├── 70-rx888-boot.rules                  # RX888: trigger firmware upload on USB plug-in
+│   ├── 71-rx888-autoload.rules-disabled     # RX888: alternate autoload rule (disabled)
+│   ├── 71-rx888.rules                       # RX888: grant non-root USB access post-boot
+│   ├── 72-rx888-ka9q.rules                  # RX888: KA9Q-specific USB permissions
+│   ├── 73-fobos-sdr.rules                   # Rigexpert Fobos: grant non-root USB access
+│   ├── 74-fobos-sdr-ka9q.rules              # Rigexpert Fobos: KA9Q-specific permissions
+│   ├── Makefile                             # installs udev rules to /etc/udev/rules.d
+│   └── README                              # notes on udev rule numbering and usage
+├── service                                  # systemd service unit templates (expanded at install time)
+│   ├── acars.service.in                     # ACARS decoder service template
+│   ├── aprsfeed.service.in                  # aprsfeed daemon service template
+│   ├── cwd.service.in                       # CW (Morse) decoder service template
+│   ├── ft4-decode.service.in                # FT4 decoder service template (single instance)
+│   ├── ft4-decode@.service.in               # FT4 decoder service template (parameterised instance)
+│   ├── ft4-record.service.in                # FT4 recording service template
+│   ├── ft8-decode.service.in                # FT8 decoder service template (single instance)
+│   ├── ft8-decode@.service.in               # FT8 decoder service template (parameterised instance)
+│   ├── ft8-record.service.in                # FT8 recording service template
+│   ├── hfdl.service.in                      # HFDL decoder service template
+│   ├── horusdemod.service.in                # Project Horus 4FSK telemetry decoder service template
+│   ├── Makefile                             # expands .in templates and installs service units
+│   ├── packetd.service.in                   # AX.25 packet daemon service template
+│   ├── radiod@.service.in                   # radiod parameterised service template (main daemon)
+│   ├── recordings@.service.in               # pcmrecord parameterised recording service template
+│   ├── rx888_boot.service.in                # RX888 firmware upload service (runs at USB plug-in)
+│   ├── set_lo_multicast.service.in          # loopback multicast enable service template
+│   └── wspr-decoded.service.in              # WSPR decoder service template
+├── share                                    # Runtime data files installed to /usr/local/share/ka9q-radio
+│   ├── 120s_failure.img                     # RX888 watchdog firmware image (120s failure timeout)
+│   ├── 120s_watchdog.img                    # RX888 watchdog firmware image (120s timeout)
+│   ├── 20s_watchdog.img                     # RX888 watchdog firmware image (20s timeout)
+│   ├── 60s_watchdog.img                     # RX888 watchdog firmware image (60s timeout)
+│   ├── bandplan.txt                         # amateur radio band plan: frequency ranges and mode assignments
+│   ├── help.txt                             # help text displayed by the control program
+│   ├── id.txt                               # WSPR/beacon station frequency list
+│   ├── ka9q_ctl.lua                         # Lua script: radio control via the metadata protocol
+│   ├── Makefile                             # installs share/ data files
+│   ├── monitor-help.txt                     # help text displayed by the monitor program
+│   ├── presets.conf                         # receiver mode presets (bandwidth, filter, squelch defaults)
+│   ├── SDDC_FX3.img                         # RX888 Mk II primary firmware image (Cypress FX3 USB)
+│   ├── ssrc-decimal.lua                     # Lua script: convert RTP SSRC hex to decimal for filtering
+│   └── W1EUJ_0.1.0_FX3.img                 # RX888 Mk II alternate firmware image
+└── src                                      # C source code for all executables, libraries, and driver plugins
+    ├── airspy.c                             # Airspy R2 hardware driver plugin (dlopen'd by radiod)
+    ├── airspyhf.c                           # Airspy HF+ hardware driver plugin (dlopen'd by radiod)
+    ├── aprs.c                               # APRS daemon: decodes AX.25 frames, outputs APRS-IS feed
+    ├── aprsfeed.c                           # APRS internet gateway: relays APRS packets to APRS-IS
+    ├── attr.c                               # RTP source attribute encode/decode (channel metadata)
+    ├── attr.h                               # RTP attribute declarations
+    ├── audio.c                              # audio output: Opus encoding and multicast RTP transmission
+    ├── avahi_browse.c                       # mDNS service discovery: wraps avahi-browse subprocess
+    ├── avahi.c                              # mDNS service registration: wraps avahi-publish subprocess
+    ├── avahi.h                              # mDNS interface declarations (stable; mdns.c will implement)
+    ├── ax25.c                               # AX.25 packet radio protocol: frame encode/decode
+    ├── ax25.h                               # AX.25 declarations
+    ├── bandplan.c                           # amateur band plan lookup: frequency → band name/mode
+    ├── bandplan.h                           # band plan declarations
+    ├── bladerf.c                            # BladeRF SDR hardware driver plugin
+    ├── Brewfile                             # Homebrew dependency list for macOS development
+    ├── config.c                             # INI config file parser wrapper around iniparser library
+    ├── config.h                             # config parser declarations
+    ├── control.c                            # interactive receiver control program (ncurses UI)
+    ├── ctcss.c                              # CTCSS (PL tone) encoder/detector for repeater squelch
+    ├── cwd.c                                # CW (Morse code) decoder daemon
+    ├── decode_status.c                      # decode incoming radiod status/metadata multicast packets
+    ├── dump.c                               # packet hex dump utility for debugging
+    ├── ezusb.c                              # EZ-USB (Cypress) firmware loader used by RX888
+    ├── ezusb.h                              # EZ-USB declarations
+    ├── fcd.c                                # FUNcube Dongle Pro+: USB HID control and audio routing
+    ├── fcd.h                                # FUNcube Dongle declarations
+    ├── fcdhidcmd.h                          # FUNcube Dongle HID command byte definitions
+    ├── fft-gen.c                            # FFTW wisdom file generation utility (run once per machine)
+    ├── filter.c                             # FFT-based overlap-save fast convolution filter (core DSP)
+    ├── filter.h                             # filter declarations
+    ├── fm.c                                 # narrowband FM demodulator
+    ├── fobos.c                              # Rigexpert Fobos SDR hardware driver plugin
+    ├── funcube.c                            # FUNcube Dongle Pro+ hardware driver plugin
+    ├── gauss.c                              # Gaussian (normal) random number generation
+    ├── hackrf.c                             # HackRF One hardware driver plugin
+    ├── hid-libusb.c                         # HID (Human Interface Device) access via libusb
+    ├── hidapi.h                             # HID API declarations (for FUNcube Dongle)
+    ├── hydrasdr.c                           # HydraSDR (rfone) hardware driver plugin
+    ├── iir.c                                # IIR digital filter: design (Butterworth etc.) and apply
+    ├── iir.h                                # IIR filter declarations
+    ├── import.h                             # platform/compiler import attribute declarations
+    ├── jt-decoded.c                         # JT65/FT8/FT4 decoded message processor and logger
+    ├── linear.c                             # linear mode demodulator: SSB (LSB/USB), AM, DSB, CW
+    ├── main.c                               # radiod entry point: argument parsing, config load, startup
+    ├── Makefile                             # primary build rules for all targets (authoritative)
+    ├── metadump.c                           # dump radiod status/metadata multicast stream to stdout
+    ├── misc.c                               # miscellaneous utility functions (time, string, math helpers)
+    ├── misc.h                               # misc utility declarations
+    ├── modes.c                              # demodulation mode table: name↔enum, parameter defaults
+    ├── monitor-data.c                       # monitor: audio data receive, jitter buffer, Opus decode
+    ├── monitor-display.c                    # monitor: ncurses display rendering
+    ├── monitor-repeater.c                   # monitor: repeater/squelch tail logic
+    ├── monitor.c                            # monitor program entry point: listens to audio multicast streams
+    ├── monitor.h                            # monitor program shared declarations
+    ├── morse.c                              # Morse code encode/decode tables and functions
+    ├── morse.h                              # Morse code declarations
+    ├── multicast.c                          # IP multicast socket setup, join/leave, send/receive I/O
+    ├── multicast.h                          # multicast declarations
+    ├── old                                  # archived source files (not built)
+    │   ├── decimate.c                       # old: polyphase decimation filter (superseded by filter.c)
+    │   ├── decimate.h                       # old: decimation filter declarations
+    │   ├── Makefile.osx                     # old: macOS-specific makefile (superseded by CMakeLists.txt)
+    │   └── old-avahi.c                      # old: earlier Avahi client library implementation
+    ├── opusd.c                              # Opus encoder daemon: PCM multicast → Opus multicast
+    ├── opussend.c                           # send a PCM audio stream as Opus over multicast
+    ├── osc.c                                # numerically controlled oscillator (NCO/DDS): phase accumulator
+    ├── osc.h                                # oscillator declarations
+    ├── packetd.c                            # AX.25 packet radio decoder daemon
+    ├── pcmcat.c                             # output a PCM multicast audio stream to stdout
+    ├── pcmrecord.c                          # record a PCM/Opus multicast audio stream to file
+    ├── pcmsend.c                            # send raw PCM audio samples over multicast RTP
+    ├── pcmspawn.c                           # pipe a PCM multicast audio stream to an external program
+    ├── powers.c                             # display per-channel signal power and SNR measurements
+    ├── radio_status.c                       # radiod status packet encode/decode (channel state)
+    ├── radio.c                              # core radio engine: driver loading, channel management, DSP dispatch
+    ├── radio.h                              # core data structures: frontend, channel, demod state
+    ├── rdsd.c                               # RDS (Radio Data System) decoder daemon for FM broadcast
+    ├── rtcp.c                               # RTCP (RTP Control Protocol) sender reports (experimental)
+    ├── rtlsdr.c                             # RTL-SDR dongle hardware driver plugin
+    ├── rtp.c                                # RTP packet encode/decode: header, sequence, timestamp
+    ├── rtp.h                                # RTP declarations
+    ├── rx888_boot.c                         # RX888 Mk II: USB firmware upload at device plug-in
+    ├── rx888.c                              # RX888 Mk II direct-sampling SDR hardware driver plugin
+    ├── rx888.h                              # RX888 declarations
+    ├── sdrplay.c                            # SDRplay RSP series hardware driver plugin
+    ├── set_xcvr.c                           # set FM transceiver parameters via serial (Raspberry Pi GPIO)
+    ├── setfilt.c                            # utility: set channel filter passband via control protocol
+    ├── show-pkt.c                           # display incoming RTP packet headers (debug/diagnostic)
+    ├── show-sig.c                           # display channel signal status in real time (ncurses)
+    ├── si5351.c                             # Si5351 I2C programmable clock generator driver
+    ├── si5351.h                             # Si5351 declarations
+    ├── sig_gen.c                            # software signal generator driver plugin (no hardware required)
+    ├── sincospi.c                           # double-precision sinpi(x)/cospi(x): sin/cos of pi*x
+    ├── sincospif.c                          # single-precision sincospif(x): float sin/cos of pi*x
+    ├── spectrum.c                           # spectrum analyser: FFT power binning and multicast output
+    ├── status.c                             # status/metadata packet builder: encode channel state to TLV
+    ├── status.h                             # status packet field tag definitions (TLV protocol constants)
+    ├── stereod.c                            # FM stereo (pilot-tone) decoder daemon
+    ├── tune.c                               # utility: tune a receiver channel to a new frequency
+    ├── wd-record.c                          # wideband recorder: captures raw IQ or PCM to disk
+    ├── wfm.c                                # wideband FM demodulator (broadcast FM, >100 kHz deviation)
+    ├── window.c                             # FFT window functions: Kaiser, Hamming, Hann, flat-top
+    └── window.h                             # window function declarations
+
+37 directories, 496 files

@@ -1,0 +1,22 @@
+#!/bin/sh
+# postinstall script for ka9q-radio-systemd (RPM)
+
+# Reload systemd to pick up new service files
+if command -v systemctl > /dev/null 2>&1 && systemctl is-system-running > /dev/null 2>&1; then
+    systemctl daemon-reload || true
+    echo ""
+    echo "systemd service files for ka9q-radio have been installed."
+    echo ""
+    echo "To start a radiod instance:"
+    echo "  sudo systemctl start radiod@<configname>"
+    echo ""
+    echo "To enable on boot:"
+    echo "  sudo systemctl enable radiod@<configname>"
+    echo ""
+    echo "Where <configname> corresponds to /etc/radio/radiod@<configname>.conf"
+else
+    echo "Warning: systemd not detected, but systemd service files were installed."
+    echo "This package should only be installed on systemd-based systems."
+fi
+
+exit 0

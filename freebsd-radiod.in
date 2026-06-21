@@ -1,0 +1,111 @@
+#!/bin/sh
+#
+# PROVIDE: radiod
+# REQUIRE: NETWORKING DAEMON avahi_daemon
+# KEYWORD: shutdown
+#
+# Add the following lines to /etc/rc.conf to enable radiod:
+#
+# radiod_enable="YES"
+# radiod_instances="hf vhf"  # Space-separated list of instance names
+# radiod_hf_config="/usr/local/etc/radio/radiod@hf.conf"
+# radiod_vhf_config="/usr/local/etc/radio/radiod@vhf.conf"
+
+. /etc/rc.subr
+
+name="radiod"
+rcvar=radiod_enable
+
+load_rc_config $name
+
+# Defaults
+: ${radiod_enable:="NO"}
+: ${radiod_instances:=""}
+: ${radiod_user:="radio"}
+: ${radiod_group:="radio"}
+: ${radiod_program:="@KA9Q_SBIN_DIR@/radiod"}
+
+command="${radiod_program}"
+pidfile="/var/run/${name}.pid"
+
+start_precmd="radiod_prestart"
+start_cmd="radiod_start"
+stop_cmd="radiod_stop"
+status_cmd="radiod_status"
+
+radiod_prestart()
+{
+    # Check if user and group exist
+    if ! pw groupshow ${radiod_group} > /dev/null 2>&1; then
+        echo "Creating group ${radiod_group}"
+        pw groupadd ${radiod_group}
+    fi
+    
+    if ! pw usershow ${radiod_user} > /dev/null 2>&1; then
+        echo "Creating user ${radiod_user}"
+        pw useradd ${radiod_user} -g ${radiod_group} -d /var/lib/ka9q-radio \
+            -s /usr/sbin/nologin -c "KA9Q Radio daemon"
+    fi
+    
+    # Create state directory if needed
+    if [ ! -d "@KA9Q_STATE_DIR@" ]; then
+        mkdir -p "@KA9Q_STATE_DIR@"
+        chown ${radiod_user}:${radiod_group} "@KA9Q_STATE_DIR@"
+    fi
+}
+
+radiod_start()
+{
+    if [ -z "${radiod_instances}" ]; then
+        echo "No radiod instances configured."
+        echo "Set radiod_instances in /etc/rc.conf"
+        return 1
+    fi
+    
+    for instance in ${radiod_instances}; do
+        eval config=\$radiod_${instance}_config
+        if [ -z "${config}" ]; then
+            config="@KA9Q_CONFIG_DIR@/radiod@${instance}.conf"
+        fi
+        
+        if [ ! -f "${config}" ]; then
+            echo "Config file not found: ${config}"
+            continue
+        fi
+        
+        echo "Starting radiod instance: ${instance}"
+        /usr/sbin/daemon -u ${radiod_user} -p /var/run/radiod_${instance}.pid \
+            ${command} -v ${config}
+    done
+}
+
+radiod_stop()
+{
+    for instance in ${radiod_instances}; do
+        pidfile="/var/run/radiod_${instance}.pid"
+        if [ -f "${pidfile}" ]; then
+            echo "Stopping radiod instance: ${instance}"
+            kill `cat ${pidfile}` 2>/dev/null
+            rm -f ${pidfile}
+        fi
+    done
+}
+
+radiod_status()
+{
+    for instance in ${radiod_instances}; do
+        pidfile="/var/run/radiod_${instance}.pid"
+        if [ -f "${pidfile}" ]; then
+            pid=`cat ${pidfile}`
+            if kill -0 ${pid} 2>/dev/null; then
+                echo "radiod instance '${instance}' is running (pid ${pid})"
+            else
+                echo "radiod instance '${instance}' is not running (stale pidfile)"
+            fi
+        else
+            echo "radiod instance '${instance}' is not running"
+        fi
+    done
+}
+
+run_rc_command "$1"

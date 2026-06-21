@@ -1,0 +1,65 @@
+#!/bin/sh
+# postinst script for ka9q-radio
+set -e
+
+case "$1" in
+    configure)
+        # Create radio group if it doesn't exist
+        if ! getent group radio > /dev/null 2>&1; then
+            addgroup --system radio
+        fi
+
+        # Create radio user if it doesn't exist
+        if ! getent passwd radio > /dev/null 2>&1; then
+            adduser --system --ingroup radio --home /var/lib/ka9q-radio \
+                --no-create-home --disabled-password --disabled-login \
+                --gecos "KA9Q Radio daemon" radio
+        fi
+
+        # Set ownership of state directory
+        if [ -d /var/lib/ka9q-radio ]; then
+            chown -R radio:radio /var/lib/ka9q-radio
+        fi
+
+        # Set ownership of config directory
+        if [ -d /etc/radio ]; then
+            chown -R root:radio /etc/radio
+            chmod 2775 /etc/radio
+        fi
+
+        # Reload udev rules if udevadm is available
+        if command -v udevadm > /dev/null 2>&1; then
+            udevadm control --reload-rules || true
+            udevadm trigger || true
+        fi
+
+        # Reload systemd ONLY if systemctl is available and systemd is running
+        if command -v systemctl > /dev/null 2>&1 && systemctl is-system-running > /dev/null 2>&1; then
+            systemctl daemon-reload || true
+            echo "systemd service files installed. Start with:"
+            echo "  sudo systemctl start radiod@<configname>"
+        else
+            echo "systemd not detected. You'll need to start radiod manually or use your init system."
+            echo "Run radiod with: /usr/local/sbin/radiod -v /etc/radio/radiod@<config>.conf"
+        fi
+
+        # Apply sysctl settings
+        if [ -f /etc/sysctl.d/98-sockbuf.conf ] && command -v sysctl > /dev/null 2>&1; then
+            sysctl -p /etc/sysctl.d/98-sockbuf.conf || true
+        fi
+
+        echo ""
+        echo "ka9q-radio installed successfully."
+        echo "Example config files are available in /etc/radio/"
+        ;;
+
+    abort-upgrade|abort-remove|abort-deconfigure)
+        ;;
+
+    *)
+        echo "postinst called with unknown argument \`$1'" >&2
+        exit 1
+        ;;
+esac
+
+exit 0

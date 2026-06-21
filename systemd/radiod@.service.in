@@ -1,0 +1,30 @@
+[Unit]
+Description=KA9Q Radio Daemon (%i)
+Documentation=https://github.com/ka9q/ka9q-radio
+After=network.target avahi-daemon.service
+Wants=network.target
+
+[Service]
+Type=simple
+User=radio
+Group=radio
+ExecStart=@KA9Q_SBIN_DIR@/radiod -v @KA9Q_CONFIG_DIR@/radiod@%i.conf
+Restart=on-failure
+RestartSec=10
+
+# Resource limits
+LimitMEMLOCK=infinity
+LimitRTPRIO=99
+
+# Security hardening (adjust as needed)
+ProtectSystem=strict
+ProtectHome=yes
+ReadWritePaths=@KA9Q_STATE_DIR@
+NoNewPrivileges=true
+PrivateTmp=true
+
+# Device access (may need to adjust for specific hardware)
+DeviceAllow=/dev/bus/usb
+
+[Install]
+WantedBy=multi-user.target
