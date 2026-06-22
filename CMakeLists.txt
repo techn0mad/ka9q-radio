@@ -52,9 +52,10 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         message(STATUS "Set PKG_CONFIG_PATH to ${PKG_CONFIG_PATH}")
     endif()
 
-    # Add package manager lib dir to the linker search path so that
-    # libraries found via pkg-config (which may return just -lfoo without -L)
-    # can be located by the linker at link time.
+    # pkg-config reports libraries as plain "-lfoo" without a -L path. On Linux
+    # this works because /usr/lib is searched by default. On macOS, Homebrew
+    # installs to /opt/homebrew/lib which the linker does not search by default.
+    # link_directories() adds it globally so every target can find Homebrew libs.
     if(DEFINED HOMEBREW_PREFIX)
         link_directories(${HOMEBREW_PREFIX}/lib)
     elseif(DEFINED MACPORTS_PREFIX)
@@ -113,11 +114,16 @@ find_package(PkgConfig REQUIRED)
 # Core required libraries
 pkg_check_modules(FFTW3F REQUIRED fftw3f)
 
-# Find FFTW (single-precision) and its threads component as imported targets
+# IMPORTED_TARGET creates a CMake target (PkgConfig::FFTW3F) that bundles the
+# include dirs, library name, AND library search path together. Without it,
+# the linker gets "-lfftw3f" but no "-L /opt/homebrew/lib" and fails on macOS.
 pkg_check_modules(FFTW3F     IMPORTED_TARGET fftw3f)
 pkg_check_modules(FFTW3F_THR IMPORTED_TARGET fftw3f_threads)
 
 pkg_check_modules(OPUS REQUIRED opus)
+# libbsd provides arc4random/strlcpy on old glibc (Ubuntu 22.04 and earlier).
+# FreeBSD, OpenBSD, and macOS have these functions natively — libbsd does not
+# even exist as a package on those platforms, so guard it to Linux only.
 if(LINUX)
     pkg_check_modules(BSD REQUIRED libbsd)
 endif()
@@ -235,7 +241,9 @@ endif()
 find_library(USB_LIBRARY usb-1.0)
 find_path(USB_INCLUDE_DIR libusb-1.0/libusb.h)
 
-# dlopen — in libc on macOS/FreeBSD; separate libdl on Linux
+# dlopen() is used by radiod to load hardware driver plugins at runtime.
+# On Linux it lives in a separate libdl; on macOS/FreeBSD it is part of libc.
+# find_library returns empty if not found, so the link line is safe on all platforms.
 find_library(DL_LIBRARY dl)
 
 # Audio libraries (for monitor program)
@@ -268,7 +276,10 @@ elseif(FREEBSD)
     set(KA9Q_RC_DIR "${CMAKE_INSTALL_SYSCONFDIR}/rc.d")
 endif()
 
-# Generate config_paths.h (paths + git version info used by misc.h, radio.c, filter.c)
+# configure_file() reads a template (config_paths.h.in), substitutes @VAR@ placeholders
+# with CMake variable values, and writes the result into the build directory.
+# The upstream Makefile generates this header with a shell script; we replicate it here
+# so both build systems produce the same CONFDIR/STATEDIR/GIT_HASH macros.
 find_package(Git QUIET)
 if(Git_FOUND)
     execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
@@ -308,7 +319,10 @@ set(LIBRADIO_SOURCES
     src/config.c
 )
 
-# avahi.c / avahi_browse.c require avahi-client headers; use stubs elsewhere
+# avahi.h includes <avahi-client/client.h> which does not exist on macOS/BSD.
+# When avahi-client is present (Linux), compile the real implementation.
+# Otherwise compile a stub that provides the same function signatures as no-ops.
+# This lets all other source files include avahi.h unconditionally.
 if(AVAHI_CLIENT_FOUND)
     list(APPEND LIBRADIO_SOURCES src/avahi.c src/avahi_browse.c)
 else()
@@ -316,15 +330,21 @@ else()
 endif()
 
 
-# Create libradio (static for now, but could be shared)
+# libradio.a is the shared core linked by every daemon and tool.
+# PUBLIC on target_include_directories / target_link_libraries means the flags
+# propagate automatically to any target that links against radio — so radiod,
+# aprs, monitor, etc. all inherit fftw3f, opus, threads without repeating them.
 add_library(radio STATIC ${LIBRADIO_SOURCES})
 
 target_include_directories(radio PUBLIC
     ${CMAKE_CURRENT_SOURCE_DIR}/src
-    ${CMAKE_CURRENT_BINARY_DIR}
+    ${CMAKE_CURRENT_BINARY_DIR}      # for generated config_paths.h
     ${FFTW3F_INCLUDE_DIRS}
     ${BSD_INCLUDE_DIRS}
 )
+# Prefer the IMPORTED_TARGET form: PkgConfig::FFTW3F bundles include dirs,
+# library name, and library search path together. The fallback uses raw variables
+# plus an explicit target_link_directories for the library path.
 if(TARGET PkgConfig::FFTW3F)
   target_link_libraries(radio PUBLIC PkgConfig::FFTW3F)
 else()
@@ -492,13 +512,23 @@ else()
   message(WARNING "fftw3f_threads not found; builds using FFTW threading will fail to link on some targets.")
 endif()
 
-# ---- Driver plugins (built as MODULE and dlopened at runtime) ----
+# Hardware drivers are built as MODULE libraries — a CMake library type that
+# produces a .so/.dylib which is NOT linked at compile time but loaded at runtime
+# via dlopen(). This is distinct from SHARED (linked at startup) and STATIC
+# (baked in). radiod selects which driver to load based on the config file.
+#
+# Each driver references symbols (Verbose, Blocktime, scale_AD, etc.) defined in
+# radiod's main.c / radio.c, not in libradio.a. On Linux these resolve at runtime
+# because radiod is built with ENABLE_EXPORTS (equivalent to -rdynamic), which
+# exports all symbols from the executable into the dynamic symbol table.
+# On macOS the MODULE also needs -undefined dynamic_lookup to tell the linker
+# "these symbols will come from whoever dlopen()s me — don't error at link time."
 function(add_driver name)
   cmake_parse_arguments(DRV "" "" "SOURCES;LIBS;INCLUDES" ${ARGN})
-  # Use an internal target name to avoid clashes with system libs
+  # Internal target name avoids clashes with system library names (e.g. rtlsdr)
   set(_t "${name}_drv")
   add_library(${_t} MODULE ${DRV_SOURCES})
-  # Keep the .so/.dylib filename as "airspy", "rtlsdr", etc.
+  # OUTPUT_NAME keeps the on-disk filename as "airspy.so", not "airspy_drv.so"
   set_target_properties(${_t} PROPERTIES OUTPUT_NAME "${name}")
   if(DRV_INCLUDES)
     target_include_directories(${_t} PRIVATE ${DRV_INCLUDES})
@@ -508,8 +538,6 @@ function(add_driver name)
   else()
     target_link_libraries(${_t} PRIVATE radio)
   endif()
-  # On macOS, MODULE bundles must allow symbols (Verbose, Blocktime, etc.) that
-  # are defined in the host radiod binary and resolved at runtime via dlopen.
   if(APPLE)
     target_link_options(${_t} PRIVATE -undefined dynamic_lookup)
   endif()
@@ -817,8 +845,14 @@ add_executable(radiod
     src/radio_status.c
     src/rtcp.c
 )
-set_target_properties(radiod PROPERTIES ENABLE_EXPORTS TRUE)  # -rdynamic for dlopen
-# radio.c returns -1 from a void* function (error path); Clang rejects this as an error
+# ENABLE_EXPORTS is the CMake equivalent of the linker flag -rdynamic (Linux/BSD)
+# or -Wl,-export_dynamic (macOS). It causes all symbols in the radiod executable
+# to be exported into the dynamic symbol table so that dlopen'd driver plugins
+# can resolve symbols like Verbose and Blocktime back into the host process.
+set_target_properties(radiod PROPERTIES ENABLE_EXPORTS TRUE)
+# radio.c has "return -1" inside a void* function on an error path. GCC warns;
+# Clang treats it as a hard error. set_source_files_properties applies the flag
+# to this one file only — project-wide suppression would hide real bugs elsewhere.
 set_source_files_properties(src/radio.c PROPERTIES COMPILE_OPTIONS "-Wno-int-conversion")
 target_link_libraries(radiod PRIVATE radio ${USB_LIBRARY} ${DL_LIBRARY})
 
@@ -904,6 +938,10 @@ target_link_libraries(ctcss PRIVATE radio)
 
 add_executable(opusd src/opusd.c)
 target_link_libraries(opusd PRIVATE radio)
+# opusd.c uses struct pollfd without an explicit #include <poll.h>. On Linux
+# poll.h is pulled in transitively through other system headers; on macOS it
+# is not. -include poll.h force-includes it before the source file is parsed,
+# avoiding a change to the upstream source file.
 if(MACOS)
   target_compile_options(opusd PRIVATE -include poll.h)
 endif()
