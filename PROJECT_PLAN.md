@@ -1,9 +1,9 @@
 # ka9q-radio Portability Project Plan
 
-Cross-platform port of ka9q-radio to Ubuntu, macOS, and FreeBSD, with CI/CD,
-testing, and architectural improvements. Goals are numbered 1–11 as defined in
-the project brief; phases are ordered to deliver working builds early and keep
-upstream-sync risk low throughout.
+Cross-platform port of ka9q-radio to Ubuntu, macOS, FreeBSD, and OpenBSD, with
+CI/CD, testing, and architectural improvements. Goals are numbered 1–11 as
+defined in the project brief; phases are ordered to deliver working builds early
+and keep upstream-sync risk low throughout.
 
 ---
 
@@ -11,8 +11,8 @@ upstream-sync risk low throughout.
 
 | Phase | Goals | Theme | Upstream risk |
 |-------|-------|-------|---------------|
-| 1 | 1,2,3,10 | Complete the CMake build — all three platforms compile | Low |
-| 2 | 9,11 | CI/CD pipelines for all three platforms | None |
+| 1 | 1,2,3,10 | Complete the CMake build — all four platforms compile | Low |
+| 2 | 9,11 | CI/CD pipelines for all four platforms | None |
 | 3 | 4,10 | Native mDNS via `dns_sd.h` (Bonjour compatibility) | Low |
 | 4 | 8-L1 | Unit tests for pure DSP functions | None |
 | 5 | 5 | Repo structure — separate build/CI/packaging from source | Low |
@@ -35,9 +35,9 @@ clean, verified build on all three platforms before deeper changes begin.
 ## Phase 1 — Complete the CMake build (Goals 1, 2, 3)
 
 **Theme:** Get `cmake --build` to produce a full, correct set of binaries on
-Ubuntu, macOS, and FreeBSD. No source-code changes beyond minimal platform
-guards. This phase keeps the upstream `src/Makefile` as-is and adds our
-`CMakeLists.txt` alongside it.
+Ubuntu, macOS, FreeBSD, and OpenBSD. No source-code changes beyond minimal
+platform guards. This phase keeps the upstream `src/Makefile` as-is and adds
+our `CMakeLists.txt` alongside it.
 
 ### Tasks
 
@@ -87,19 +87,34 @@ endif()
 The `#if defined(linux) / #include <bsd/string.h>` guards already in the
 source files handle the include side correctly.
 
-#### 1.3 Add FreeBSD `#elif` path in `multicast.c`
+#### 1.3 Add BSD path in `multicast.c`
 
 `multicast.c` already has `#if defined(linux)` guards around the Linux-specific
-includes (`<linux/if_packet.h>`, `<linux/capability.h>`), but there is no
-FreeBSD code path below them. Add:
+includes (`<linux/if_packet.h>`, `<linux/capability.h>`), but there is no BSD
+code path below them. Use a negative test rather than enumerating individual
+BSDs, so all BSD variants (FreeBSD, OpenBSD, NetBSD) are covered without
+modifying this file again when a new BSD target is added:
+
 ```c
-#elif defined(__FreeBSD__)
+#if defined(__linux__)
+#include <linux/if_packet.h>
+#include <linux/capability.h>
+#else
+/* BSD family: FreeBSD, OpenBSD, NetBSD, macOS */
 #include <net/if_dl.h>
 #include <net/bpf.h>
+#endif
 ```
-and corresponding FreeBSD equivalents for the raw-socket/capability sections
-inside the function bodies (lines 24–32 and 609+). This is the only source file
-requiring a `#elif __FreeBSD__` addition in Phase 1.
+
+Apply the same `#if defined(__linux__) / #else / #endif` pattern to the
+raw-socket and capability sections inside the function bodies (lines 24–32 and
+609+). This is the only upstream source file that requires modification in Phase 1.
+
+**Rationale:** `#elif defined(__FreeBSD__)` would have required a follow-up
+`#elif defined(__OpenBSD__)` and future additions for each new BSD. The `!linux`
+form is strictly narrower — it changes exactly one decision boundary — and is
+the idiomatic approach in portable BSD/Linux code (see POSIX `<sys/param.h>`
+tradition).
 
 #### 1.4 Fix FreeBSD rc.d template path
 
@@ -129,52 +144,70 @@ already handle `strlcpy`/`strlcat` — those are in glibc 2.38+ (Ubuntu 24.04)
 or macOS/FreeBSD natively. Same CMake detection approach: if not available,
 provide `src/compat/strlcpy.c` (20 lines, standard implementation).
 
-#### 1.6 Add FreeBSD pkg dependency list
+#### 1.6 Add BSD pkg dependency lists
 
 `CMakeLists.txt` has a placeholder `CPACK_FREEBSD_PACKAGE_DEPS` that needs
-the actual FreeBSD port names:
+the actual port names. Neither BSD needs `libbsd`.
+
+FreeBSD (`pkg install`):
 ```
 fftw3-float, opus, iniparser, avahi-app (or mDNSResponder), ncurses, portaudio
 ```
-Note: `libbsd` is not listed — it is not needed on FreeBSD.
+
+OpenBSD (`pkg_add`):
+```
+fftw3, opus, iniparser, avahi, portaudio
+```
+Note: OpenBSD's `fftw3` package includes the float variant; ncurses is in base.
 
 #### 1.7 Verify builds
 
 - Ubuntu: run existing CI locally (`cmake -B build && cmake --build build`)
 - macOS: same, confirm Homebrew paths resolve
 - FreeBSD: build in a jail or VM; document any remaining missing pkg names
+- OpenBSD: build in a VM; verify `dlopen` of MODULE drivers works under W^X
+  (OpenBSD enforces write-XOR-execute system-wide; standard shared libraries
+  are expected to work, but this needs a real test on OpenBSD 7.x)
 
 ### Success criteria
 
-- `cmake --build` succeeds on all three platforms
+- `cmake --build` succeeds on all four platforms
 - All daemons, user tools, and `sig_gen.so` are present in the build output
-- `libbsd` is not required on macOS or FreeBSD
-- `arc4random` resolves on all three platforms without `libbsd`
+- `libbsd` is not required on macOS, FreeBSD, or OpenBSD
+- `arc4random` resolves on all four platforms without `libbsd`
 - No upstream `src/*.c` or `src/*.h` files modified except `multicast.c` (one
-  `#elif` block) and any `compat/` shims added alongside, not within, upstream files
+  `#if __linux__ / #else` block) and any `compat/` shims added alongside,
+  not within, upstream files
 
 ### Upstream sync risk: Low
 
 Only `multicast.c` is touched in upstream source. The `src/compat/` shim files
 are additive. If upstream changes `multicast.c`, the merge conflict is isolated
-and obvious.
+and obvious. The `!defined(__linux__)` form means adding OpenBSD support does
+not require touching `multicast.c` again.
 
 ---
 
 ## Phase 2 — CI/CD pipelines (Goal 9)
 
-**Theme:** Every push and PR gets build-and-test feedback on all three
-platforms. FreeBSD runs via `vmactions/freebsd-vm`
-(https://github.com/vmactions/freebsd-vm), a GitHub Action maintained by
-Neil Pang (`neilpang`, author of `acme.sh`) that boots a FreeBSD VM in QEMU
-on a standard Ubuntu runner. Ubuntu and macOS use GitHub Actions natively.
-A tagged release automatically publishes platform packages as GitHub Release
-assets.
+**Theme:** Every push and PR gets build-and-test feedback on all four
+platforms. BSD platforms run via Neil Pang's (`neilpang`, author of `acme.sh`)
+`vmactions` family of GitHub Actions, which boot VMs in QEMU on standard
+Ubuntu runners:
 
-`vmactions/freebsd-vm` was chosen over the alternative
-`cross-platform-actions/action` (https://github.com/cross-platform-actions/action)
-based on project health indicators as of June 2026: 346 vs 191 stars,
-6 vs 36 open issues, and a systematic template-based release process.
+- `vmactions/freebsd-vm` (https://github.com/vmactions/freebsd-vm) — FreeBSD
+- `vmactions/openbsd-vm` (https://github.com/vmactions/openbsd-vm) — OpenBSD
+
+Ubuntu and macOS use GitHub Actions natively. A tagged release automatically
+publishes platform packages as GitHub Release assets.
+
+`vmactions` was chosen over the alternative `cross-platform-actions/action`
+(https://github.com/cross-platform-actions/action) based on project health
+indicators as of June 2026: 346 vs 191 stars, 6 vs 36 open issues, and a
+systematic template-based release process. Both QEMU-based approaches have
+the same NAT-networking constraint. Adding OpenBSD does not change this
+choice — `vmactions/openbsd-vm` is part of the same family and applies the
+same quality criteria.
 
 **Important constraint:** Both QEMU-based approaches use NAT networking inside
 the VM. Loopback multicast (needed for Phase 7 integration tests) is unlikely
@@ -202,9 +235,9 @@ Replace the current `make`-only jobs with CMake + CTest jobs:
 Keep dependency install steps; remove the Avahi-from-source build on macOS
 (that moves to Phase 3 when native dns_sd replaces it).
 
-#### 2.2 Add FreeBSD job via `vmactions/freebsd-vm`
+#### 2.2 Add BSD jobs via `vmactions`
 
-Add a new job to `.github/workflows/ci.yml` — no separate CI config file
+Add two new jobs to `.github/workflows/ci.yml` — no separate CI config file
 needed:
 
 ```yaml
@@ -226,11 +259,30 @@ freebsd-build:
           cmake --build build --parallel
           ctest --test-dir build --output-on-failure -L unit
           cd build && cpack -G TXZ
+
+openbsd-build:
+  name: OpenBSD CI
+  runs-on: ubuntu-latest
+  steps:
+    - uses: actions/checkout@v4
+    - uses: vmactions/openbsd-vm@v1
+      with:
+        release: '7.5'
+        usesh: true
+        prepare: |
+          pkg_add cmake pkgconf fftw3 opus iniparser \
+            avahi portaudio libusb
+        run: |
+          cmake -B build -DCMAKE_BUILD_TYPE=Release
+          cmake --build build --parallel
+          ctest --test-dir build --output-on-failure -L unit
+          cd build && cpack -G TGZ
 ```
 
 The `-L unit` flag on `ctest` runs only the unit-test label (Phase 4), which
 has no multicast dependency. Integration tests (Phase 7) are excluded here
-pending a solution to the NAT networking constraint.
+pending a solution to the NAT networking constraint (applies equally to both
+BSD jobs).
 
 #### 2.3 Publish release artifacts on tag
 
@@ -239,15 +291,16 @@ Add a `release` workflow triggered by `push: tags: ['v*']` that:
 2. Uploads `.deb` (Ubuntu), `.tar.gz` (macOS), `.txz` (FreeBSD) as GitHub
    Release assets using `actions/upload-release-asset`
 
-#### 2.4 Make all three jobs required status checks
+#### 2.4 Make all four jobs required status checks
 
 In GitHub repo Settings → Branches → Branch protection rules: require
-`ubuntu-build`, `macos-build`, and `freebsd-build` to pass before merge.
+`ubuntu-build`, `macos-build`, `freebsd-build`, and `openbsd-build` to pass
+before merge.
 
 ### Success criteria
 
-- PR status shows three green checks (Ubuntu, macOS, FreeBSD)
-- Tag push produces a GitHub Release with three downloadable packages
+- PR status shows four green checks (Ubuntu, macOS, FreeBSD, OpenBSD)
+- Tag push produces a GitHub Release with four downloadable packages
 - A build failure on any platform blocks merge
 
 ### Upstream sync risk: None
@@ -271,6 +324,7 @@ and a uniform API across all three platforms.
 | macOS | System mDNSResponder | Built-in; `#include <dns_sd.h>` |
 | Linux | `avahi-compat-libdns_sd` | `libavahi-compat-libdns_sd-dev` |
 | FreeBSD | `net/avahi` port or `net/mDNSResponder` | Either provides `dns_sd.h` |
+| OpenBSD | `net/avahi` port | Provides `dns_sd.h` compat layer |
 
 ### Tasks
 
@@ -315,6 +369,7 @@ endif()
 - macOS: **remove** the Avahi-from-source build (15+ line block); add nothing
   (dns_sd.h is in the SDK)
 - FreeBSD: `pkg install avahi` already provides `dns_sd.h`
+- OpenBSD: `pkg_add avahi` provides `dns_sd.h` — identical to FreeBSD path
 
 #### 3.4 Test service registration and discovery
 
@@ -558,6 +613,7 @@ interface. These run as a CI pre-test step:
 | Linux | `ip link set lo multicast on && ip route add 224.0.0.0/4 dev lo` |
 | macOS | `route add -net 224.0.0.0/4 -interface lo0` |
 | FreeBSD | `route add -net 224.0.0.0/4 -interface lo0` |
+| OpenBSD | `route add -net 224.0.0.0/4 -interface lo0` |
 
 #### 7.3 Layer 2: Integration tests
 
@@ -628,7 +684,8 @@ All test code is in `tests/` — no upstream files modified except the single
 - Keep `git diff upstream/main -- src/` as small as possible; the diff should
   be explainable in a paragraph
 - Upstream files modified in total across all phases:
-  - `src/multicast.c` — one `#elif __FreeBSD__` block (Phase 1)
+  - `src/multicast.c` — one `#if __linux__ / #else` block (Phase 1); the
+    `!linux` form covers all BSDs without future modification
   - `src/sig_gen.c` — one `#ifdef HAVE_PORTAUDIO` guard (Phase 7)
   - `src/avahi.c`, `src/config.c`, `src/status.c` — `fprintf` → `LOG_*`
     substitutions (Phase 6, mechanical)
@@ -687,19 +744,19 @@ all hosted runners.
 `tests/system/run_local.sh` that starts and stops everything, matching what
 the CI job does.
 
-#### Local FreeBSD development
+#### Local BSD development
 
-Developers working on macOS or Linux who need to validate FreeBSD-specific
-changes have three options, in order of preference:
+Developers working on macOS or Linux who need to validate BSD-specific changes
+have three options, in order of preference:
 
-1. **FreeBSD VM via QEMU/UTM** — full native environment; same `cmake`/`ctest`
-   commands. UTM (macOS) or `virt-manager` (Linux) with a FreeBSD 14 image.
+1. **BSD VM via QEMU/UTM** — full native environment; same `cmake`/`ctest`
+   commands. UTM (macOS) or `virt-manager` (Linux) with a FreeBSD 14 or
+   OpenBSD 7.x image. On OpenBSD, also verifies `dlopen` under W^X.
 2. **`act`** (https://github.com/nektos/act) — runs GitHub Actions workflows
    locally in Docker. Useful for testing CI configuration changes without a
-   push. Does not emulate FreeBSD; use for Ubuntu job validation only.
-3. **Cross-compile check only** — `cmake -DCMAKE_TOOLCHAIN_FILE=cmake/freebsd-cross.cmake`
-   verifies FreeBSD-specific code paths compile; cannot run tests. Acceptable
-   for quick iteration on `#ifdef __FreeBSD__` changes.
+   push. Does not emulate BSDs; use for Ubuntu job validation only.
+3. **Cross-compile check only** — verifies BSD-specific code paths compile;
+   cannot run tests. Acceptable for quick iteration on `#if !__linux__` changes.
 
 #### Rules enforced by design
 
@@ -743,31 +800,56 @@ on platform-specific tools (binaries that must be present at runtime).
 The goal is not uniformity — it is using what the platform provides rather
 than fighting it:
 
-| Facility | Linux (Ubuntu) | macOS | FreeBSD |
-|----------|---------------|-------|---------|
-| mDNS | Avahi (`avahi-daemon`) via `dns_sd.h` compat | mDNSResponder (native, `dns_sd.h`) | Avahi or mDNSResponder via `dns_sd.h` |
-| Audio | ALSA/PulseAudio via portaudio | CoreAudio via portaudio | OSS via portaudio |
-| Service mgmt | systemd (optional) | launchd (not used) | rc.d (template provided) |
-| Capabilities | `setcap` (optional, graceful fallback) | not applicable | not applicable |
-| Package format | `.deb` | `.tar.gz` | `.txz` |
+| Facility | Linux (Ubuntu) | macOS | FreeBSD | OpenBSD |
+|----------|---------------|-------|---------|---------|
+| mDNS | Avahi (`avahi-daemon`) via `dns_sd.h` compat | mDNSResponder (native, `dns_sd.h`) | Avahi or mDNSResponder via `dns_sd.h` | Avahi port via `dns_sd.h` |
+| Audio | ALSA/PulseAudio via portaudio | CoreAudio via portaudio | OSS via portaudio | sndio via portaudio |
+| Service mgmt | systemd (optional) | launchd (not used) | rc.d (template provided) | rc.d |
+| Capabilities | `setcap` (optional, graceful fallback) | not applicable | not applicable | not applicable |
+| Package format | `.deb` | `.tar.gz` | `.txz` | `.tgz` |
 
 portaudio is the right abstraction for audio precisely because it maps to
-CoreAudio, ALSA, and OSS natively on each platform — it is not a layer of
-added complexity but a thin portability shim with no runtime daemon dependency.
+CoreAudio, ALSA, OSS, and sndio natively on each platform — it is not a layer
+of added complexity but a thin portability shim with no runtime daemon dependency.
+
+#### Portability philosophy
+
+The goal is not uniformity for its own sake — it is **expressing the actual
+dependency at the right level of abstraction**. Three distinct cases apply:
+
+**Use the same cross-platform library everywhere** when that library *is* the
+correct abstraction:
+- `libusb` — all SDR hardware vendors already target it; it is a thin wrapper
+  over IOKit (macOS), usbfs (Linux), and native BSD USB stacks
+- `portaudio` — abstracts CoreAudio, ALSA, OSS, and sndio; no application code
+  changes needed per platform
+- `fftw3f` — pure math; no platform-specific alternative worth considering
+
+**Use a standard API, not a specific implementation** when the interface is
+stable and multiple platforms implement it:
+- `dns_sd.h` — the right dependency to express is "I need RFC-6762 mDNS", not
+  "I need Avahi". Apple defined the API; Avahi implements it on Linux/BSD.
+  Phase 3 adopts this approach.
+
+**Never use CLI tools as runtime dependencies** regardless of platform:
+- The current `avahi-browse`/`avahi-publish` via `popen()`/`execlp()` is a
+  hidden runtime dependency on tools being installed in `$PATH`. This is
+  categorically worse than a library dependency and the primary motivation for
+  Phase 3, not any platform-specific concern.
 
 ### Dependency summary by platform
 
-| Library | Ubuntu | macOS | FreeBSD | Notes |
-|---------|--------|-------|---------|-------|
-| fftw3f | `libfftw3-dev` | `brew install fftw` | `pkg install fftw3` | Required |
-| opus | `libopus-dev` | `brew install opus` | `pkg install opus` | Required |
-| libbsd | `libbsd-dev` (glibc < 2.36 only) | not needed | not needed | Phase 1 |
-| iniparser | system or vendored | system or vendored | system or vendored | Goal 10 |
-| ncurses | `libncurses5-dev` | `brew install ncurses` | built-in | Required |
-| portaudio | `portaudio19-dev` | `brew install portaudio` | `pkg install portaudio` | Optional |
-| libusb | `libusb-1.0-0-dev` | `brew install libusb` | `pkg install libusb` | Optional (HW drivers) |
-| mDNS | `libavahi-compat-libdns_sd-dev` | SDK built-in | `pkg install avahi` | Phase 3 |
-| liquid-dsp | `libliquid-dev` (optional) | `brew install liquid-dsp` (optional) | `pkg install liquid-dsp` (optional) | Already guarded |
-| airspy | `libairspy-dev` | `brew install airspy` | `pkg install airspy` | Optional (HW) |
-| rtlsdr | `librtlsdr-dev` | `brew install librtlsdr` | `pkg install rtl-sdr` | Optional (HW) |
-| hackrf | `libhackrf-dev` | `brew install hackrf` | `pkg install hackrf` | Optional (HW) |
+| Library | Ubuntu | macOS | FreeBSD | OpenBSD | Notes |
+|---------|--------|-------|---------|---------|-------|
+| fftw3f | `libfftw3-dev` | `brew install fftw` | `pkg install fftw3` | `pkg_add fftw3` | Required |
+| opus | `libopus-dev` | `brew install opus` | `pkg install opus` | `pkg_add opus` | Required |
+| libbsd | `libbsd-dev` (glibc < 2.36 only) | not needed | not needed | not needed | Phase 1 |
+| iniparser | system or vendored | system or vendored | system or vendored | system or vendored | Goal 10 |
+| ncurses | `libncurses5-dev` | `brew install ncurses` | built-in | built-in | Required |
+| portaudio | `portaudio19-dev` | `brew install portaudio` | `pkg install portaudio` | `pkg_add portaudio` | Optional |
+| libusb | `libusb-1.0-0-dev` | `brew install libusb` | `pkg install libusb` | `pkg_add libusb` | Optional (HW drivers) |
+| mDNS | `libavahi-compat-libdns_sd-dev` | SDK built-in | `pkg install avahi` | `pkg_add avahi` | Phase 3 |
+| liquid-dsp | `libliquid-dev` (optional) | `brew install liquid-dsp` (optional) | `pkg install liquid-dsp` (optional) | `pkg_add liquid-dsp` (optional) | Already guarded |
+| airspy | `libairspy-dev` | `brew install airspy` | `pkg install airspy` | `pkg_add airspy` | Optional (HW) |
+| rtlsdr | `librtlsdr-dev` | `brew install librtlsdr` | `pkg install rtl-sdr` | `pkg_add rtl-sdr` | Optional (HW) |
+| hackrf | `libhackrf-dev` | `brew install hackrf` | `pkg install hackrf` | `pkg_add hackrf` | Optional (HW) |
