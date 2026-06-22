@@ -51,6 +51,15 @@ elseif(CMAKE_SYSTEM_NAME STREQUAL "Darwin")
         set(ENV{PKG_CONFIG_PATH} "${PKG_CONFIG_PATH}")
         message(STATUS "Set PKG_CONFIG_PATH to ${PKG_CONFIG_PATH}")
     endif()
+
+    # Add package manager lib dir to the linker search path so that
+    # libraries found via pkg-config (which may return just -lfoo without -L)
+    # can be located by the linker at link time.
+    if(DEFINED HOMEBREW_PREFIX)
+        link_directories(${HOMEBREW_PREFIX}/lib)
+    elseif(DEFINED MACPORTS_PREFIX)
+        link_directories(${MACPORTS_PREFIX}/lib)
+    endif()
 endif()
 
 # Set C standard
@@ -108,29 +117,10 @@ pkg_check_modules(FFTW3F REQUIRED fftw3f)
 pkg_check_modules(FFTW3F     IMPORTED_TARGET fftw3f)
 pkg_check_modules(FFTW3F_THR IMPORTED_TARGET fftw3f_threads)
 
-# Attach to 'radio' (static lib used by all plugins/exes)
-if(TARGET PkgConfig::FFTW3F)
-  target_link_libraries(radio PUBLIC PkgConfig::FFTW3F)
-else()
-  # Fallback if IMPORTED_TARGET isn't available
-  target_link_libraries(radio PUBLIC ${FFTW3F_LIBRARIES})
-  if(FFTW3F_LIBRARY_DIRS)
-    target_link_directories(radio PUBLIC ${FFTW3F_LIBRARY_DIRS})
-  endif()
-endif()
-
-if(TARGET PkgConfig::FFTW3F_THR)
-  target_link_libraries(radio PUBLIC PkgConfig::FFTW3F_THR)
-else()
-  # Fallback for threads lib
-  find_library(FFTW3F_THREADS_LIBRARY NAMES fftw3f_threads)
-  if(FFTW3F_THREADS_LIBRARY)
-    target_link_libraries(radio PUBLIC ${FFTW3F_THREADS_LIBRARY})
-  endif()
-endif()
-
 pkg_check_modules(OPUS REQUIRED opus)
-pkg_check_modules(BSD REQUIRED libbsd)
+if(LINUX)
+    pkg_check_modules(BSD REQUIRED libbsd)
+endif()
 
 # Ask pkg-config to create imported targets
 pkg_check_modules(AIRSPY    IMPORTED_TARGET libairspy)
@@ -245,6 +235,9 @@ endif()
 find_library(USB_LIBRARY usb-1.0)
 find_path(USB_INCLUDE_DIR libusb-1.0/libusb.h)
 
+# dlopen — in libc on macOS/FreeBSD; separate libdl on Linux
+find_library(DL_LIBRARY dl)
+
 # Audio libraries (for monitor program)
 pkg_check_modules(PORTAUDIO portaudio-2.0)
 pkg_check_modules(ALSA alsa)
@@ -275,6 +268,24 @@ elseif(FREEBSD)
     set(KA9Q_RC_DIR "${CMAKE_INSTALL_SYSCONFDIR}/rc.d")
 endif()
 
+# Generate config_paths.h (paths + git version info used by misc.h, radio.c, filter.c)
+find_package(Git QUIET)
+if(Git_FOUND)
+    execute_process(COMMAND ${GIT_EXECUTABLE} rev-parse HEAD
+        OUTPUT_VARIABLE GIT_HASH OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    execute_process(COMMAND ${GIT_EXECUTABLE} show -s --format=%ci
+        OUTPUT_VARIABLE GIT_TIME OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    execute_process(COMMAND ${GIT_EXECUTABLE} log --pretty=format:%d -n 1
+        OUTPUT_VARIABLE GIT_BRANCH OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    execute_process(COMMAND ${GIT_EXECUTABLE} log -1 --format=%s
+        OUTPUT_VARIABLE GIT_SUMMARY OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    execute_process(COMMAND ${GIT_EXECUTABLE} describe --always --dirty --tags
+        OUTPUT_VARIABLE GIT_VERSION OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+    execute_process(COMMAND ${GIT_EXECUTABLE} remote get-url origin
+        OUTPUT_VARIABLE GIT_REMOTE_URL OUTPUT_STRIP_TRAILING_WHITESPACE ERROR_QUIET)
+endif()
+configure_file(cmake/config_paths.h.in ${CMAKE_CURRENT_BINARY_DIR}/config_paths.h @ONLY)
+
 # Common source files for libradio
 set(LIBRADIO_SOURCES
     src/ax25.c
@@ -282,11 +293,12 @@ set(LIBRADIO_SOURCES
     src/bandplan.c
     src/dump.c
     src/modes.c
-    src/avahi.c
-    src/avahi_browse.c
     src/attr.c
     src/filter.c
     src/iir.c
+    src/window.c
+    src/sincospi.c
+    src/sincospif.c
     src/decode_status.c
     src/status.c
     src/misc.c
@@ -296,17 +308,44 @@ set(LIBRADIO_SOURCES
     src/config.c
 )
 
+# avahi.c / avahi_browse.c require avahi-client headers; use stubs elsewhere
+if(AVAHI_CLIENT_FOUND)
+    list(APPEND LIBRADIO_SOURCES src/avahi.c src/avahi_browse.c)
+else()
+    list(APPEND LIBRADIO_SOURCES src/compat/avahi_stub.c)
+endif()
+
 
 # Create libradio (static for now, but could be shared)
 add_library(radio STATIC ${LIBRADIO_SOURCES})
 
 target_include_directories(radio PUBLIC
-    ${CMAKE_CURRENT_SOURCE_DIR}/include
+    ${CMAKE_CURRENT_SOURCE_DIR}/src
+    ${CMAKE_CURRENT_BINARY_DIR}
     ${FFTW3F_INCLUDE_DIRS}
     ${BSD_INCLUDE_DIRS}
 )
+if(TARGET PkgConfig::FFTW3F)
+  target_link_libraries(radio PUBLIC PkgConfig::FFTW3F)
+else()
+  target_link_libraries(radio PUBLIC ${FFTW3F_LIBRARIES})
+  if(FFTW3F_LIBRARY_DIRS)
+    target_link_directories(radio PUBLIC ${FFTW3F_LIBRARY_DIRS})
+  endif()
+endif()
+
+if(TARGET PkgConfig::FFTW3F_THR)
+  target_link_libraries(radio PUBLIC PkgConfig::FFTW3F_THR)
+else()
+  find_library(FFTW3F_THREADS_LIBRARY NAMES fftw3f_threads
+               HINTS ${FFTW3F_LIBRARY_DIRS})
+  if(FFTW3F_THREADS_LIBRARY)
+    target_link_libraries(radio PUBLIC ${FFTW3F_THREADS_LIBRARY})
+    target_compile_definitions(radio PUBLIC HAVE_FFTW_THREADS=1)
+  endif()
+endif()
+
 target_link_libraries(radio PUBLIC
-    ${FFTW3F_LIBRARIES}
     ${BSD_LIBRARIES}
     Threads::Threads
     ${MATH_LIBRARY}
@@ -383,7 +422,7 @@ if(AVAHI_CLIENT_FOUND)
     endif()
   endforeach()
 
-  target_compile_definitions(radio PUBLIC HAVE_AVAHI=1)
+  target_compile_definitions(radio PUBLIC HAVE_AVAHI=1 HAVE_AVAHI_CLIENT=1)
 endif()
 
 # --- Avahi via pkg-config ---
@@ -423,7 +462,7 @@ endif()
 if(AVAHI_CLIENT_FOUND)
   target_include_directories(radio PUBLIC ${AVAHI_CLIENT_INCLUDE_DIRS})
   target_link_libraries(radio  PUBLIC ${AVAHI_CLIENT_LIBRARIES})
-  target_compile_definitions(radio PUBLIC HAVE_AVAHI=1)
+  target_compile_definitions(radio PUBLIC HAVE_AVAHI=1 HAVE_AVAHI_CLIENT=1)
 
   # macOS CI used this flag; keep parity
   if(APPLE)
@@ -468,6 +507,11 @@ function(add_driver name)
     target_link_libraries(${_t} PRIVATE radio ${DRV_LIBS})
   else()
     target_link_libraries(${_t} PRIVATE radio)
+  endif()
+  # On macOS, MODULE bundles must allow symbols (Verbose, Blocktime, etc.) that
+  # are defined in the host radiod binary and resolved at runtime via dlopen.
+  if(APPLE)
+    target_link_options(${_t} PRIVATE -undefined dynamic_lookup)
   endif()
   install(TARGETS ${_t}
           LIBRARY DESTINATION ${KA9Q_LIB_DIR}
@@ -532,8 +576,13 @@ if(PORTAUDIO_FOUND AND USB_LIBRARY AND USB_INCLUDE_DIR)
   add_driver(funcube SOURCES src/funcube.c;src/fcd.c;src/hid-libusb.c LIBS ${PORTAUDIO_LIBRARIES} ${USB_LIBRARY} INCLUDES ${PORTAUDIO_INCLUDE_DIRS} ${USB_INCLUDE_DIR})
 endif()
 if(USB_LIBRARY AND USB_INCLUDE_DIR)
-  add_driver(rx888   SOURCES src/rx888.c;src/ezusb.c;src/hid-libusb.c LIBS ${USB_LIBRARY} INCLUDES ${USB_INCLUDE_DIR})
+  add_driver(rx888   SOURCES src/rx888.c;src/si5351.c;src/ezusb.c;src/hid-libusb.c LIBS ${USB_LIBRARY} INCLUDES ${USB_INCLUDE_DIR})
 endif()
+
+# sig_gen: software signal generator — always built; no hardware required
+add_driver(sig_gen SOURCES src/sig_gen.c src/gauss.c
+           LIBS ${SAMPLERATE_LIBRARIES}
+           INCLUDES ${SAMPLERATE_INCLUDE_DIRS})
 
 if(TARGET oggrecord)
     install(TARGETS oggrecord DESTINATION ${KA9Q_BIN_DIR} COMPONENT runtime)
@@ -754,20 +803,86 @@ endif()
 
 include(CPack)
 
-# tools that require iniparser (e.g., control)
+# ---- Daemons (install to sbin) ----
+
+# radiod: main SDR daemon — loads hardware drivers via dlopen
+add_executable(radiod
+    src/main.c
+    src/audio.c
+    src/fm.c
+    src/wfm.c
+    src/linear.c
+    src/spectrum.c
+    src/radio.c
+    src/radio_status.c
+    src/rtcp.c
+)
+set_target_properties(radiod PROPERTIES ENABLE_EXPORTS TRUE)  # -rdynamic for dlopen
+# radio.c returns -1 from a void* function (error path); Clang rejects this as an error
+set_source_files_properties(src/radio.c PROPERTIES COMPILE_OPTIONS "-Wno-int-conversion")
+target_link_libraries(radiod PRIVATE radio ${USB_LIBRARY} ${DL_LIBRARY})
+
+add_executable(aprs src/aprs.c)
+target_link_libraries(aprs PRIVATE radio)
+
+add_executable(aprsfeed src/aprsfeed.c)
+target_link_libraries(aprsfeed PRIVATE radio)
+
+add_executable(cwd src/cwd.c)
+target_link_libraries(cwd PRIVATE radio)
+
+add_executable(packetd src/packetd.c)
+target_link_libraries(packetd PRIVATE radio)
+
+# rx888_boot: firmware uploader; only needed when RX888 is enabled
+if(USB_LIBRARY AND USB_INCLUDE_DIR)
+  add_executable(rx888_boot src/rx888_boot.c src/ezusb.c)
+  target_link_libraries(rx888_boot PRIVATE ${USB_LIBRARY} ${MATH_LIBRARY} Threads::Threads)
+  target_include_directories(rx888_boot PRIVATE ${USB_INCLUDE_DIR} ${CMAKE_CURRENT_BINARY_DIR})
+endif()
+
+# ---- User tools (install to bin) ----
+
 if(INIPARSER_FOUND AND NCURSES_FOUND)
   add_executable(control src/control.c)
   target_link_libraries(control PRIVATE radio Iniparser::iniparser ${NCURSES_LIBRARIES})
 endif()
 
-add_executable(packetd src/packetd.c)
-target_link_libraries(packetd PRIVATE radio)
-
 add_executable(fft-gen src/fft-gen.c)
-target_link_libraries(fft-gen PRIVATE radio ${FFTW3F_LIBRARIES})
+target_link_libraries(fft-gen PRIVATE radio)
 
-add_executable(pl src/pl.c)
-target_link_libraries(pl PRIVATE radio ${FFTW3F_LIBRARIES})
+add_executable(jt-decoded src/jt-decoded.c)
+target_link_libraries(jt-decoded PRIVATE radio)
+
+add_executable(metadump src/metadump.c)
+target_link_libraries(metadump PRIVATE radio)
+
+if(PORTAUDIO_FOUND AND NCURSES_FOUND AND INIPARSER_FOUND)
+  add_executable(monitor
+      src/monitor.c src/monitor-data.c src/monitor-display.c src/monitor-repeater.c)
+  target_include_directories(monitor PRIVATE ${PORTAUDIO_INCLUDE_DIRS} ${SAMPLERATE_INCLUDE_DIRS})
+  target_link_libraries(monitor PRIVATE radio
+      ${PORTAUDIO_LIBRARIES} ${NCURSES_LIBRARIES} Iniparser::iniparser)
+  if(SAMPLERATE_FOUND)
+    target_link_libraries(monitor PRIVATE ${SAMPLERATE_LIBRARIES})
+  endif()
+  if(ALSA_FOUND)
+    target_link_libraries(monitor PRIVATE ${ALSA_LIBRARIES})
+  endif()
+endif()
+
+if(PORTAUDIO_FOUND)
+  add_executable(opussend src/opussend.c)
+  target_include_directories(opussend PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
+  target_link_libraries(opussend PRIVATE radio ${PORTAUDIO_LIBRARIES})
+endif()
+
+add_executable(pcmrecord src/pcmrecord.c)
+target_link_libraries(pcmrecord PRIVATE radio)
+if(OGG_FOUND)
+  target_include_directories(pcmrecord PRIVATE ${OGG_INCLUDE_DIRS})
+  target_link_libraries(pcmrecord PRIVATE ${OGG_LIBRARIES})
+endif()
 
 add_executable(powers src/powers.c)
 target_link_libraries(powers PRIVATE radio)
@@ -775,26 +890,23 @@ target_link_libraries(powers PRIVATE radio)
 add_executable(tune src/tune.c)
 target_link_libraries(tune PRIVATE radio)
 
-add_executable(show-sig src/show-sig.c)
-target_link_libraries(show-sig PRIVATE radio ${NCURSES_LIBRARIES})
-
-add_executable(show-pkt src/show-pkt.c)
-target_link_libraries(show-pkt PRIVATE radio ${NCURSES_LIBRARIES})
-
-add_executable(rdsd src/rdsd.c)
-target_link_libraries(rdsd PRIVATE radio ${FFTW3F_LIBRARIES})
-
-add_executable(stereod src/stereod.c)
-target_link_libraries(stereod PRIVATE radio)
-
-add_executable(jt-decoded src/jt-decoded.c)
-target_link_libraries(jt-decoded PRIVATE radio)
-
 add_executable(wd-record src/wd-record.c)
 target_link_libraries(wd-record PRIVATE radio)
+if(OGG_FOUND)
+  target_include_directories(wd-record PRIVATE ${OGG_INCLUDE_DIRS})
+  target_link_libraries(wd-record PRIVATE ${OGG_LIBRARIES})
+endif()
 
-add_executable(cwd src/cwd.c)
-target_link_libraries(cwd PRIVATE radio)
+add_executable(ctcss src/ctcss.c)
+target_link_libraries(ctcss PRIVATE radio)
+
+# ---- Secondary tools (built but not installed by default) ----
+
+add_executable(opusd src/opusd.c)
+target_link_libraries(opusd PRIVATE radio)
+if(MACOS)
+  target_compile_options(opusd PRIVATE -include poll.h)
+endif()
 
 add_executable(pcmcat src/pcmcat.c)
 target_link_libraries(pcmcat PRIVATE radio)
@@ -802,19 +914,43 @@ target_link_libraries(pcmcat PRIVATE radio)
 add_executable(pcmspawn src/pcmspawn.c)
 target_link_libraries(pcmspawn PRIVATE radio)
 
-add_executable(sig-gen src/sig_gen.c)
-target_link_libraries(sig-gen PRIVATE radio)
-
-# Always install the daemon if present
-if(TARGET radiod)
-  install(TARGETS radiod DESTINATION ${KA9Q_SBIN_DIR} COMPONENT runtime)
+if(PORTAUDIO_FOUND)
+  add_executable(pcmsend src/pcmsend.c)
+  target_include_directories(pcmsend PRIVATE ${PORTAUDIO_INCLUDE_DIRS})
+  target_link_libraries(pcmsend PRIVATE radio ${PORTAUDIO_LIBRARIES})
 endif()
 
-# Binaries: install only those that exist
+add_executable(rdsd src/rdsd.c)
+target_link_libraries(rdsd PRIVATE radio)
+
+add_executable(setfilt src/setfilt.c)
+target_link_libraries(setfilt PRIVATE radio)
+
+add_executable(show-pkt src/show-pkt.c)
+target_link_libraries(show-pkt PRIVATE radio ${NCURSES_LIBRARIES})
+
+add_executable(show-sig src/show-sig.c)
+target_link_libraries(show-sig PRIVATE radio ${NCURSES_LIBRARIES})
+
+add_executable(stereod src/stereod.c)
+target_link_libraries(stereod PRIVATE radio)
+
+# ---- Install rules ----
+
+# Daemons → sbin
+foreach(_t IN ITEMS radiod aprs aprsfeed cwd packetd)
+  if(TARGET ${_t})
+    install(TARGETS ${_t} DESTINATION ${KA9Q_SBIN_DIR} COMPONENT runtime)
+  endif()
+endforeach()
+if(TARGET rx888_boot)
+  install(TARGETS rx888_boot DESTINATION ${KA9Q_SBIN_DIR} COMPONENT runtime)
+endif()
+
+# User tools → bin
 foreach(_t IN ITEMS
-  control monitor pcmrecord pcmplay opussend metadump
-  fft-gen pl powers tune show-sig show-pkt rdsd stereod
-  jt-decoded wd-record cwd pcmcat pcmspawn sig-gen packetd)
+    control ctcss fft-gen jt-decoded metadump monitor opussend
+    pcmrecord pl powers tune wd-record)
   if(TARGET ${_t})
     install(TARGETS ${_t} DESTINATION ${KA9Q_BIN_DIR} COMPONENT runtime)
   endif()

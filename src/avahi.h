@@ -1,4 +1,5 @@
 #ifndef _AVAHI_H
+#ifdef HAVE_AVAHI_CLIENT
 #include <avahi-client/client.h>
 #include <avahi-client/publish.h>
 #include <avahi-common/alternative.h>
@@ -6,6 +7,7 @@
 #include <avahi-common/malloc.h>
 #include <avahi-common/error.h>
 #include <avahi-common/timeval.h>
+#endif /* HAVE_AVAHI_CLIENT */
 
 extern bool Static_avahi;
 
