@@ -1,0 +1,45 @@
+<?xml version="1.0" encoding="UTF-8"?>
+<!DOCTYPE plist PUBLIC "-//Apple//DTD PLIST 1.0//EN" "http://www.apple.com/DTDs/PropertyList-1.0.dtd">
+<!--
+  ka9q-radio radiod launchd template for macOS.
+
+  launchd has no equivalent of systemd's radiod@%i instantiation, so this is a
+  template: copy it once per receiver, replacing @INSTANCE@ with the receiver
+  name, into /Library/LaunchDaemons/ and load it with launchctl. See
+  docs/PORTABLE-INIT.md.
+-->
+<plist version="1.0">
+<dict>
+	<key>Label</key>
+	<string>net.ka9q.radiod.@INSTANCE@</string>
+
+	<key>ProgramArguments</key>
+	<array>
+		<string>@sbindir@/radiod</string>
+		<string>-N</string>
+		<string>@INSTANCE@</string>
+		<string>@sysconfdir@/radio/radiod@@INSTANCE@.conf</string>
+	</array>
+
+	<key>UserName</key>
+	<string>radio</string>
+	<key>GroupName</key>
+	<string>radio</string>
+
+	<key>RunAtLoad</key>
+	<true/>
+	<key>KeepAlive</key>
+	<true/>
+
+	<!-- Nice=-10 mirrors the systemd unit. Umask 2 (decimal) == 002 octal. -->
+	<key>Nice</key>
+	<integer>-10</integer>
+	<key>Umask</key>
+	<integer>2</integer>
+
+	<key>StandardOutPath</key>
+	<string>/var/log/ka9q-radio/radiod-@INSTANCE@.log</string>
+	<key>StandardErrorPath</key>
+	<string>/var/log/ka9q-radio/radiod-@INSTANCE@.log</string>
+</dict>
+</plist>

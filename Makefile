@@ -46,7 +46,38 @@ export ENABLE_FUNCUBE ENABLE_HACKRF ENABLE_HYDRASDR
 export ENABLE_RTLSDR ENABLE_RX888 ENABLE_SDRPLAY ENABLE_SIG_GEN
 export DEB_BUILD_ARCH
 
-SUBDIRS=src aux share service rules docs config
+# Init-system integration is platform-specific. systemd units live in service/
+# (with udev rules/); other service managers live under platform/<os>/. Exactly
+# one is built and installed. Override the auto choice with
+# INIT_SYSTEM=systemd|launchd|freebsd-rc|openbsd-rc|none.
+INIT_SYSTEM ?= auto
+ifeq ($(INIT_SYSTEM),auto)
+  ifeq ($(UNAME_S),Linux)
+    INIT_SYSTEM = systemd
+  else ifeq ($(UNAME_S),Darwin)
+    INIT_SYSTEM = launchd
+  else ifeq ($(UNAME_S),FreeBSD)
+    INIT_SYSTEM = freebsd-rc
+  else ifeq ($(UNAME_S),OpenBSD)
+    INIT_SYSTEM = openbsd-rc
+  else
+    INIT_SYSTEM = none
+  endif
+endif
+
+ifeq ($(INIT_SYSTEM),systemd)
+  INIT_SUBDIRS = service rules
+else ifeq ($(INIT_SYSTEM),launchd)
+  INIT_SUBDIRS = platform/macos
+else ifeq ($(INIT_SYSTEM),freebsd-rc)
+  INIT_SUBDIRS = platform/freebsd
+else ifeq ($(INIT_SYSTEM),openbsd-rc)
+  INIT_SUBDIRS = platform/openbsd
+else
+  INIT_SUBDIRS =
+endif
+
+SUBDIRS=src aux share $(INIT_SUBDIRS) docs config
 .PHONY: all clean install uninstall $(SUBDIRS) purge
 
 all: $(SUBDIRS)

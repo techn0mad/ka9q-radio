@@ -1,0 +1,38 @@
+#!/bin/sh
+#
+# ka9q-radio radiod service for FreeBSD (rc.subr)
+#
+# PROVIDE: radiod
+# REQUIRE: NETWORKING
+# KEYWORD: shutdown
+#
+# Enable in /etc/rc.conf:
+#   radiod_enable="YES"
+#   radiod_instance="ka9q-hf"    # -> @sysconfdir@/radio/radiod@ka9q-hf.conf
+#
+# Optional /etc/rc.conf overrides:
+#   radiod_user="radio"
+#   radiod_config="/full/path/to/radiod@<instance>.conf"
+
+. /etc/rc.subr
+
+name="radiod"
+desc="KA9Q radio receiver"
+rcvar="radiod_enable"
+
+load_rc_config "$name"
+
+: ${radiod_enable:="NO"}
+: ${radiod_instance:="default"}
+: ${radiod_user:="radio"}
+: ${radiod_config:="@sysconfdir@/radio/radiod@${radiod_instance}.conf"}
+
+pidfile="/var/run/radiod_${radiod_instance}.pid"
+
+# rc.d has no built-in supervision, so wrap radiod in daemon(8): -r restarts it
+# if it exits, -u runs it unprivileged, -P records the supervisor pid.
+command="/usr/sbin/daemon"
+command_args="-r -t radiod@${radiod_instance} -u ${radiod_user} -P ${pidfile} \
+    @sbindir@/radiod -N ${radiod_instance} ${radiod_config}"
+
+run_rc_command "$1"

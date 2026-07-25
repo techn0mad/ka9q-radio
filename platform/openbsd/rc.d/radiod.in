@@ -1,0 +1,21 @@
+#!/bin/ksh
+#
+# ka9q-radio radiod service for OpenBSD
+#
+# Enable and run:
+#   rcctl enable radiod
+#   rcctl set radiod flags -N ka9q-hf @sysconfdir@/radio/radiod@ka9q-hf.conf
+#   rcctl start radiod
+#
+# radiod runs in the foreground, so rc_bg backgrounds it under rc.d.
+
+daemon="@sbindir@/radiod"
+daemon_flags="-N default @sysconfdir@/radio/radiod@default.conf"
+daemon_user="_radio"
+
+. /etc/rc.d/rc.subr
+
+rc_bg=YES
+pexp="${daemon}.*"
+
+rc_cmd $1
