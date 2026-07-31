@@ -32,10 +32,15 @@ ports:
   - name: libiconv         # -liconv, likewise
 
   # SDR front-end libraries, one per enabled ENABLE_* in the workflow.
-  # fobos and hydrasdr have no MacPorts port, so those two drivers are
-  # disabled in the macOS job rather than listed here.
+  #
+  # Three drivers are disabled in the macOS job instead of being listed here:
+  #   fobos, hydrasdr  -- no MacPorts port exists
+  #   bladeRF          -- the port depends_lib on tecla and forces
+  #                       -DENABLE_LIBTECLA=ON, with no variant to opt out.
+  #                       tecla has no prebuilt archive and fails to build from
+  #                       source on the runner. ka9q needs only libbladeRF; the
+  #                       port drags in bladeRF-cli, which is what wants tecla.
   - name: airspy
   - name: airspyhf
   - name: hackrf
   - name: rtl-sdr
-  - name: bladeRF

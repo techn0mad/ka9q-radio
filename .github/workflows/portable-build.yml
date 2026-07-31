@@ -90,11 +90,13 @@ jobs:
   macos:
     name: macOS 15 / launchd
     runs-on: macos-15
-    # fobos and hydrasdr have no MacPorts port. Everything else keeps its
-    # default from the top-level Makefile. Both make invocations must agree,
-    # since `install` depends on `all`.
+    # Drivers unavailable through MacPorts: fobos and hydrasdr have no port at
+    # all, and bladeRF's port forces a tecla dependency that has no prebuilt
+    # archive and fails to build on the runner (see the parameters file).
+    # Everything else keeps its default from the top-level Makefile. Both make
+    # invocations must agree, since `install` depends on `all`.
     env:
-      ENABLE_FLAGS: ENABLE_FOBOS=0 ENABLE_HYDRASDR=0
+      ENABLE_FLAGS: ENABLE_FOBOS=0 ENABLE_HYDRASDR=0 ENABLE_BLADERF=0
     steps:
       - uses: actions/checkout@v4
 
