@@ -5,11 +5,12 @@
 # Manual trigger only -- these jobs install system packages and then install
 # into the runner's /usr/local, so they are deliberately not wired to push.
 #
-# FreeBSD and OpenBSD are the next targets. They have no hosted runner, so they
-# will arrive as QEMU-based jobs (vmactions/freebsd-vm, vmactions/openbsd-vm)
-# following the same four steps as the jobs below: deps -> configuration ->
-# make -> install -> verify. Keeping every job in that shape is what makes the
-# comparison across platforms meaningful.
+# Every job follows the same shape -- deps -> configuration -> make -> install
+# -> verify -- which is what makes the comparison across platforms meaningful.
+#
+# FreeBSD has no hosted runner, so it builds inside a QEMU VM on an Ubuntu host.
+# OpenBSD is the remaining target and would follow identically via
+# vmactions/openbsd-vm.
 
 name: portable build
 
@@ -140,3 +141,62 @@ jobs:
           # gap is real rather than cosmetic. See docs/PORTABLE-INIT.md.
           dscl . -list /Groups | grep -qx radio
           dscl . -list /Users | grep -qx radio
+
+  freebsd:
+    name: FreeBSD 14.2 / rc.d
+    # No hosted FreeBSD runner exists; the build happens inside a QEMU VM
+    # started on an Ubuntu host by the action below.
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Build and install in a FreeBSD VM
+        # Pinned to the v1.5.2 commit rather than a floating tag: this is a
+        # third-party action running with repository checkout access.
+        uses: vmactions/freebsd-vm@77ed28d336d03fe19a3f4f7266c1d2c4714dd79d
+        with:
+          release: '14.2'
+          usesh: true
+          # Nothing needs to come back to the host; skipping the sync back
+          # saves the whole return trip.
+          copyback: false
+          # Every driver library ka9q uses is in the FreeBSD ports tree,
+          # including the three MacPorts lacks, so no ENABLE_* flags are needed
+          # here -- the full default driver set should build.
+          # libusb is in the FreeBSD base system, not a package.
+          prepare: |
+            pkg install -y gmake pkgconf fftw3-float iniparser opus libogg \
+              portaudio libsamplerate airspy airspyhf hackrf rtl-sdr \
+              hydrasdr libfobos bladerf
+          # This block runs as root inside the VM, so no sudo.
+          run: |
+            set -e
+
+            echo "--- build configuration ---"
+            uname -a
+            cc --version | head -1
+            # FreeBSD's make(1) is BSD make and cannot parse these GNU
+            # Makefiles (ifeq, pattern rules, $(shell ...)); gmake is required
+            # throughout, including for the recursive sub-makes.
+            gmake -qp 2>/dev/null | grep -E '^(INIT_SYSTEM|INIT_SUBDIRS) =' || true
+
+            echo "--- make ---"
+            gmake -j"$(sysctl -n hw.ncpu)"
+
+            echo "--- make install ---"
+            gmake install
+
+            echo "--- binaries ---"
+            test -x /usr/local/sbin/radiod
+            test -x /usr/local/bin/control
+            test -x /usr/local/bin/monitor
+            echo "ok"
+
+            echo "--- rc.d script ---"
+            ls -l /usr/local/etc/rc.d/radiod
+            test -x /usr/local/etc/rc.d/radiod
+            sh -n /usr/local/etc/rc.d/radiod
+
+            echo "--- radio user and group ---"
+            pw groupshow radio
+            pw usershow radio
