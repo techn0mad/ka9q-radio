@@ -1,0 +1,41 @@
+# MacPorts configuration for the macOS job in .github/workflows/portable-build.yml.
+#
+# MacPorts installs under /opt/local, which is exactly where src/Makefile looks
+# on Darwin:
+#
+#   ifeq ($(UNAME_S),Darwin)
+#     INCLUDES += -I/opt/local/include
+#     LDFLAGS  += -L/opt/local/lib
+#
+# so the build needs no CPPFLAGS/LDFLAGS overrides -- it compiles the same way
+# it does on a developer's Mac. docs/notes.md records MacPorts as the macOS
+# environment upstream uses.
+#
+# Ports are declared here rather than in a `port install` step so they fall
+# inside the action's cache, which is keyed on the macOS version and this file.
+
+version: '2.11.5'
+prefix: '/opt/local'
+
+ports:
+  # Core build dependencies
+  - name: pkgconfig        # monitor's recipe shells out to pkg-config for ALSA
+  - name: fftw-3-single    # -lfftw3f, -lfftw3f_threads
+  - name: iniparser
+  - name: libopus
+  - name: libogg
+  - name: portaudio
+  - name: libsamplerate
+  - name: libusb           # -lusb-1.0
+  - name: ncurses          # -lncursesw
+  - name: gettext          # -lintl, added for Darwin in src/Makefile
+  - name: libiconv         # -liconv, likewise
+
+  # SDR front-end libraries, one per enabled ENABLE_* in the workflow.
+  # fobos and hydrasdr have no MacPorts port, so those two drivers are
+  # disabled in the macOS job rather than listed here.
+  - name: airspy
+  - name: airspyhf
+  - name: hackrf
+  - name: rtl-sdr
+  - name: bladeRF

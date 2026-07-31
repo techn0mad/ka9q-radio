@@ -1,0 +1,140 @@
+# Build ka9q-radio the way a developer would on each supported platform:
+# install the documented prerequisites, run `make`, run `make install`, then
+# check that the platform's own init-system integration actually landed.
+#
+# Manual trigger only -- these jobs install system packages and then install
+# into the runner's /usr/local, so they are deliberately not wired to push.
+#
+# FreeBSD and OpenBSD are the next targets. They have no hosted runner, so they
+# will arrive as QEMU-based jobs (vmactions/freebsd-vm, vmactions/openbsd-vm)
+# following the same four steps as the jobs below: deps -> configuration ->
+# make -> install -> verify. Keeping every job in that shape is what makes the
+# comparison across platforms meaningful.
+
+name: portable build
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+jobs:
+  ubuntu:
+    name: Ubuntu 24.04 / systemd
+    runs-on: ubuntu-24.04
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Add KA9Q apt repository
+        # libfobos-dev and libhydrasdr-dev are not in the stock Ubuntu archive;
+        # docs/INSTALL.md sends developers to KA9Q's repository for them. The
+        # signing key ships in this tree, so only the suite line is generated --
+        # ka9q-sources.list defaults to Debian trixie, and this runner is noble.
+        run: |
+          set -euo pipefail
+          sed -n '/BEGIN PGP PUBLIC KEY BLOCK/,$p' ka9q-radio.asc \
+            | sudo tee /usr/share/keyrings/ka9q-radio.asc > /dev/null
+          echo 'deb [signed-by=/usr/share/keyrings/ka9q-radio.asc arch=amd64] http://www.ka9q.net/debian noble main' \
+            | sudo tee /etc/apt/sources.list.d/ka9q-sources.list > /dev/null
+          sudo apt-get update
+
+      - name: Install build dependencies
+        # The package list from docs/INSTALL.md, less git (already present).
+        run: |
+          set -euo pipefail
+          sudo apt-get install -y --no-install-recommends \
+            avahi-utils build-essential make gcc \
+            libairspy-dev libairspyhf-dev libavahi-client-dev libbladerf-dev \
+            libbsd-dev libfftw3-dev libfobos-dev libhackrf-dev libhydrasdr-dev \
+            libiniparser-dev libliquid-dev libncurses5-dev libncursesw5-dev \
+            libogg-dev libopus-dev librtlsdr-dev libsamplerate-dev \
+            libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev \
+            uuid-dev rsync
+
+      - name: Show build configuration
+        # -q so printing the variable database does not also run the default
+        # goal; it exits non-zero whenever targets are out of date, hence || true.
+        run: |
+          make -qp 2>/dev/null | grep -E '^(INIT_SYSTEM|INIT_SUBDIRS) =' || true
+          uname -a
+          cc --version | head -1
+
+      - name: make
+        run: make -j"$(nproc)"
+
+      - name: make install
+        # No DESTDIR, exactly as a developer runs it. The user/group creation in
+        # the top-level install target is guarded by `[ -z "$(DESTDIR)" ]`, so a
+        # staged install would skip it entirely -- this is the only way to
+        # exercise that path.
+        run: sudo make install
+
+      - name: Verify install
+        run: |
+          set -euo pipefail
+          echo "--- binaries ---"
+          test -x /usr/local/sbin/radiod
+          test -x /usr/local/bin/control
+          test -x /usr/local/bin/monitor
+          echo "ok"
+
+          echo "--- systemd units ---"
+          ls -l /etc/systemd/system/radiod@.service
+          test -d /usr/local/lib/ka9q-radio
+
+          echo "--- radio user and group ---"
+          getent group radio
+          getent passwd radio
+
+  macos:
+    name: macOS 15 / launchd
+    runs-on: macos-15
+    # fobos and hydrasdr have no MacPorts port. Everything else keeps its
+    # default from the top-level Makefile. Both make invocations must agree,
+    # since `install` depends on `all`.
+    env:
+      ENABLE_FLAGS: ENABLE_FOBOS=0 ENABLE_HYDRASDR=0
+    steps:
+      - uses: actions/checkout@v4
+
+      - name: Install MacPorts and build dependencies
+        # Pinned to the v1.1.6 commit rather than a floating tag: this is a
+        # low-traffic third-party action running with repository checkout access.
+        uses: melusina-org/setup-macports@103eded5f10979e927bffcd6d0b86cbbdb2c3bb3
+        with:
+          parameters: .github/parameters/setup-macports.yaml
+
+      - name: Show build configuration
+        run: |
+          port version
+          make -qp ${{ env.ENABLE_FLAGS }} 2>/dev/null | grep -E '^(INIT_SYSTEM|INIT_SUBDIRS) =' || true
+          uname -a
+          cc --version | head -1
+
+      - name: make
+        run: make -j"$(sysctl -n hw.ncpu)" ${{ env.ENABLE_FLAGS }}
+
+      - name: make install
+        run: sudo make install ${{ env.ENABLE_FLAGS }}
+
+      - name: Verify install
+        run: |
+          set -euo pipefail
+          echo "--- binaries ---"
+          test -x /usr/local/sbin/radiod
+          test -x /usr/local/bin/control
+          test -x /usr/local/bin/monitor
+          echo "ok"
+
+          echo "--- launchd template ---"
+          ls -l /usr/local/share/ka9q-radio/launchd/net.ka9q.radiod.plist
+          plutil -lint /usr/local/share/ka9q-radio/launchd/net.ka9q.radiod.plist
+
+          echo "--- radio user and group ---"
+          # Expected to FAIL today: the top-level install target creates the
+          # radio user and group with getent/addgroup/adduser, which are
+          # Debian-only. The launchd plist references this account, so the
+          # gap is real rather than cosmetic. See docs/PORTABLE-INIT.md.
+          dscl . -list /Groups | grep -qx radio
+          dscl . -list /Users | grep -qx radio
