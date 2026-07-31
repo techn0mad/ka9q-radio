@@ -48,19 +48,20 @@ also shrinks what the portability branches have to carry.
 
 ## `src/` surface touched on this branch
 
-33 files, +118/-63 against `main`. Almost all of it is one-line header changes;
-the substance is in four places. Recorded here so the upstream split above can
-be carved out without re-deriving what each change was for.
+35 files, +178/-67 against `main`. Almost all of it is one-line header changes;
+the substance is in a handful of places. Recorded here so the upstream split
+above can be carved out without re-deriving what each change was for.
 
 | Change | Files | Size | Nature |
 |--------|-------|------|--------|
 | `src/Makefile` — `DARWIN_PREFIX`, `$(LDFLAGS)` on `.so` rules, FreeBSD arm | 1 | +37/-14 | build system |
-| New shim headers `compat_net.h`, `compat_libusb.h` | 2 | +36 | new files |
+| New shim headers `compat_net.h`, `compat_libusb.h`, `compat_xattr.h` | 3 | +88 | new files |
 | `compat_net.h` adoption | 24 | 1 line each | mechanical |
 | `compat_libusb.h` adoption | 4 | 1 line each | mechanical |
 | `avahi.h` provider-neutral interface | 1 | +10/-9 | upstream candidate |
 | `hid-libusb.c` stale FreeBSD block removed | 1 | +8/-21 | upstream candidate |
 | `radio.c` unused uuid include removed | 1 | -1 | upstream candidate |
+| `attr.c` alloca/xattr portability | 1 | +8/-4 | portability |
 
 Detail on the two mechanical groups, since they account for most of the file
 count:
@@ -78,15 +79,31 @@ count:
   `<libusb-1.0/libusb.h>`; FreeBSD ships libusb in base at `<libusb.h>`, with
   no subdirectory.
 
-Both shims are deliberately independent of `ka9q_config.h`, unlike their
-counterparts on `cmake-freebsd-build`, so they work in the Makefile build
-without a generated configuration header. If the CMake work is ever merged with
-this branch, the two versions of each file need reconciling.
+- **`compat_xattr.h`** — used only by `attr.c`, but it is the largest of the
+  three shims because the three platforms genuinely differ. Linux has the
+  native xattr API; macOS has `<sys/xattr.h>` but its `f*` variants take two
+  extra arguments; FreeBSD has no xattr at all and uses `extattr(2)` with a
+  separate namespace argument. The header normalizes all three to the
+  Linux-style signature, so `attr.c`'s non-Linux branch dropped its trailing
+  `0,0` arguments. Lifted verbatim from `cmake-freebsd-build`, which needed no
+  adaptation -- unlike the other two, it never depended on `ka9q_config.h`.
+
+  `attr.c` also had an unconditional `<alloca.h>`, which is glibc-only; FreeBSD
+  declares `alloca()` in `<stdlib.h>`, already included there. Now guarded with
+  `__has_include`. Note the pre-existing `#else // mainly OSX, probably BSD`
+  branch was wrong for FreeBSD on both counts -- no such header, and no
+  `fgetxattr` at all -- so "probably BSD" had never been true.
+
+All three shims are independent of `ka9q_config.h`, so they work in the
+Makefile build without a generated configuration header. `compat_net.h` and
+`compat_libusb.h` were rewritten to drop that dependency; `compat_xattr.h`
+never had it and was lifted verbatim. If the CMake work is ever merged with
+this branch, the differing versions need reconciling.
 
 Whether the shims themselves belong upstream is a separate question from the
 four bugs above. They fix real latent portability problems, but nothing upstream
 currently builds on a platform that trips them, so upstream may reasonably not
-want the churn across 28 files.
+want the churn across 29 files.
 
 ---
 

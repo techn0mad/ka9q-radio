@@ -7,11 +7,15 @@
 #include <stdio.h>
 #include <stdlib.h>
 #include <stdarg.h>
+// glibc declares alloca() in <alloca.h>; FreeBSD has no such header and
+// declares it in <stdlib.h>, included above. macOS has both.
+#if __has_include(<alloca.h>)
 #include <alloca.h>
+#endif
 #include <string.h>
 #include <assert.h>
 #include <sys/types.h>
-#include <sys/xattr.h>
+#include "compat_xattr.h"
 #include "misc.h"
 #include "attr.h"
 
@@ -31,9 +35,9 @@ int attrscanf(int fd,char const *name,char const *format, ...){
     FREE(fullname);
   }
 #else // mainly OSX, probably BSD
-  if((attrlen = fgetxattr(fd,name,NULL,0,0,0)) >= 0){
+  if((attrlen = fgetxattr(fd,name,NULL,0)) >= 0){
     value = alloca(attrlen+1);
-    fgetxattr(fd,name,value,attrlen,0,0);
+    fgetxattr(fd,name,value,attrlen);
     value[attrlen] = '\0';
   }
 #endif
@@ -64,7 +68,7 @@ int attrprintf(int fd,char const *attr,char const *format, ...){
       FREE(prefix);
     }
 #else
-    r = fsetxattr(fd,attr,args,argslen,0,0);
+    r = fsetxattr(fd,attr,args,argslen,0);
 #endif
     FREE(args);
   }
