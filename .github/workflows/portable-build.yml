@@ -88,6 +88,25 @@ jobs:
           getent group radio
           getent passwd radio
 
+      - name: Smoke test
+        # Linking proves the symbols resolved; it says nothing about whether the
+        # binaries actually start. -V prints the version banner and exits EX_OK
+        # before any config, hardware, privilege or multicast is touched, so it
+        # is the cheapest thing that exercises the dynamic loader -- a missing
+        # shared library, a wrong rpath or an unresolved lazy symbol only
+        # appears at exec time. The banner goes to stderr, hence 2>&1.
+        run: |
+          set -euo pipefail
+          for prog in /usr/local/sbin/radiod /usr/local/bin/control /usr/local/bin/monitor; do
+            echo "--- $prog -V ---"
+            "$prog" -V > /tmp/smoke.txt 2>&1
+            cat /tmp/smoke.txt
+            grep -q "KA9Q Multichannel SDR" /tmp/smoke.txt
+            # The git metadata is baked in by src/Makefile's config_paths.h
+            # rule; an empty value means those git calls failed silently.
+            grep -qE '^Git commit hash: ..*' /tmp/smoke.txt
+          done
+
   macos:
     name: macOS 15 / launchd
     runs-on: macos-15
@@ -146,6 +165,18 @@ jobs:
             dscl . -list /Users  | grep -i radio || echo "  no matching user"
             exit 1
           fi
+
+      - name: Smoke test
+        # See the Ubuntu job for why -V is the right first-tier check.
+        run: |
+          set -euo pipefail
+          for prog in /usr/local/sbin/radiod /usr/local/bin/control /usr/local/bin/monitor; do
+            echo "--- $prog -V ---"
+            "$prog" -V > /tmp/smoke.txt 2>&1
+            cat /tmp/smoke.txt
+            grep -q "KA9Q Multichannel SDR" /tmp/smoke.txt
+            grep -qE '^Git commit hash: ..*' /tmp/smoke.txt
+          done
 
   freebsd:
     name: FreeBSD 14.2 / rc.d
@@ -229,3 +260,13 @@ jobs:
             echo "--- radio user and group ---"
             pw groupshow radio
             pw usershow radio
+
+            # Smoke test: see the Ubuntu job for why -V is the right first-tier
+            # check. It exercises the dynamic loader, which linking does not.
+            for prog in /usr/local/sbin/radiod /usr/local/bin/control /usr/local/bin/monitor; do
+              echo "--- $prog -V ---"
+              "$prog" -V > /tmp/smoke.txt 2>&1
+              cat /tmp/smoke.txt
+              grep -q "KA9Q Multichannel SDR" /tmp/smoke.txt
+              grep -qE '^Git commit hash: ..*' /tmp/smoke.txt
+            done
