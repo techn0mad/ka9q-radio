@@ -52,6 +52,13 @@ ifdef SANITIZE
      LDFLAGS += -fsanitize=address -fsanitize=undefined
 endif
 
+# libusb link flag. Linux and MacPorts install the 1.0 library as
+# libusb-1.0; FreeBSD has it in the base system, where lib/libusb builds
+# LIB=usb, so the library is libusb.so and the flag is -lusb. The API is the
+# same either way -- FreeBSD even ships a libusb-1.0.pc -- only the file name
+# differs. Overridden in the FreeBSD arm below.
+LIBUSB = -lusb-1.0
+
 ifeq ($(UNAME_S),Darwin)
   # Prefix of the package manager supplying the dependencies. MacPorts (the
   # default, and what docs/notes.md records upstream as using) puts everything
@@ -79,6 +86,7 @@ else ifeq ($(UNAME_S),FreeBSD)
   # No -lbsd: strlcpy and friends are in libc here, and every <bsd/string.h>
   # include in the tree is already guarded by #if defined(linux). No -lrt
   # either; its contents are in libc.
+  LIBUSB = -lusb
   SOFLAGS += -shared
 else
   LDLIBS += -lbsd -lrt
@@ -284,13 +292,13 @@ powers: powers.o dump.o libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ $(LDLIBS)
 
 radiod: $(RADIOD_OBJECTS)
-	$(CC) -rdynamic $(LDFLAGS) -o $@ $^ -lopus -lfftw3f_threads -lfftw3f -liniparser -lusb-1.0 -ldl $(LDLIBS)
+	$(CC) -rdynamic $(LDFLAGS) -o $@ $^ -lopus -lfftw3f_threads -lfftw3f -liniparser $(LIBUSB) -ldl $(LDLIBS)
 
 rdsd: rdsd.o avahi.o libdsp.a libstatus.a libradio.a
 	$(CC) $(LDFLAGS) -o $@ $^ -lfftw3f_threads -lfftw3f $(LDLIBS)
 
 rx888_boot: rx888_boot.o ezusb.o
-	$(CC) $(LDFLAGS) -o $@ $^ -lusb-1.0 $(LDLIBS)
+	$(CC) $(LDFLAGS) -o $@ $^ $(LIBUSB) $(LDLIBS)
 
 # not made unless we're on a rpi
 set_xcvr: set_xcvr.o libradio.a
@@ -317,10 +325,10 @@ wd-record: wd-record.o libstatus.a attr.o libradio.a
 
 ## Dynamically loaded modules for SDR front ends
 funcube.so: funcube.o fcd.o hid-libusb.o
-	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lportaudio -lusb-1.0 $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lportaudio $(LIBUSB) $(LDLIBS)
 
 rx888.so: rx888.o si5351.o ezusb.o hid-libusb.o
-	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lusb-1.0 $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ $(LIBUSB) $(LDLIBS)
 
 airspy.so: airspy.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lairspy $(LDLIBS)
@@ -341,7 +349,7 @@ fobos.so: fobos.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lfobos $(LDLIBS)
 
 hackrf.so: hackrf.o
-	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lhackrf -lusb-1.0 $(LDLIBS)
+	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lhackrf $(LIBUSB) $(LDLIBS)
 
 bladerf.so: bladerf.o
 	$(CC) $(LDFLAGS) $(SOFLAGS) -o $@ $^ -lbladeRF $(LDLIBS)
