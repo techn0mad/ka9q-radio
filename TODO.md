@@ -36,6 +36,17 @@ also shrinks what the portability branches have to carry.
   linking `-luuid`. Costs Linux builds a `uuid-dev` dependency that was never
   real. If accepted, `uuid-dev` can also come out of `docs/INSTALL.md`.
 
+- [ ] **String functions declared only by accident** — 11 files, commit
+  `ecaf310e`. `airspy.c`, `bladerf.c`, `fobos.c`, `funcube.c`, `misc.h` and six
+  others call `strncpy`, `strcmp`, `strstr`, `memset` and `strlcpy` while
+  getting `<string.h>` only transitively through `<bsd/string.h>`, which sits
+  behind `#if defined(linux)`. Harmless on Debian, where that include is always
+  taken, but the declarations are arriving by accident rather than by design.
+  Anywhere the guard excludes it, the compiler falls back to implicit
+  declarations and assumes `int` returns -- truncating every pointer-returning
+  call to 32 bits on a 64-bit target. Adding `<string.h>` unconditionally is
+  correct on every platform and costs Linux nothing.
+
 - [ ] **Stale `#ifdef __FreeBSD__` libusb workaround** — `src/hid-libusb.c`,
   commit `7f69cc8d`. A local `static inline libusb_get_string_descriptor()`
   defined on the premise that "the FreeBSD version of libusb doesn't have this
@@ -48,7 +59,7 @@ also shrinks what the portability branches have to carry.
 
 ## `src/` surface touched on this branch
 
-35 files, +178/-67 against `main`. Almost all of it is one-line header changes;
+44 files, +191/-67 against `main`. Almost all of it is one-line header changes;
 the substance is in a handful of places. Recorded here so the upstream split
 above can be carved out without re-deriving what each change was for.
 
@@ -62,6 +73,7 @@ above can be carved out without re-deriving what each change was for.
 | `hid-libusb.c` stale FreeBSD block removed | 1 | +8/-21 | upstream candidate |
 | `radio.c` unused uuid include removed | 1 | -1 | upstream candidate |
 | `attr.c` alloca/xattr portability | 1 | +8/-4 | portability |
+| `<string.h>` / `<strings.h>` declarations | 11 | 1-2 lines each | upstream candidate |
 
 Detail on the two mechanical groups, since they account for most of the file
 count:
@@ -93,6 +105,17 @@ count:
   `__has_include`. Note the pre-existing `#else // mainly OSX, probably BSD`
   branch was wrong for FreeBSD on both counts -- no such header, and no
   `fgetxattr` at all -- so "probably BSD" had never been true.
+
+- **`<string.h>` declarations** — 11 driver and utility files got an
+  unconditional `<string.h>`, and `bladerf.c` and `sdrplay.c` also `<strings.h>`.
+  They had been relying on `<bsd/string.h>` to pull in `<string.h>`
+  transitively, but that include sits behind `#if defined(linux)`, so on FreeBSD
+  `strncpy`, `strcmp`, `strstr`, `memset` and `strlcpy` were all implicitly
+  declared. This is listed as an upstream candidate rather than mere
+  portability: an implicitly declared function is assumed to return `int`, so
+  every pointer-returning call had its result truncated to 32 bits on any
+  64-bit platform where `<bsd/string.h>` was not in play. The declarations are
+  correct on Linux too; they were simply arriving by accident.
 
 All three shims are independent of `ka9q_config.h`, so they work in the
 Makefile build without a generated configuration header. `compat_net.h` and
