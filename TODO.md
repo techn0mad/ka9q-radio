@@ -155,6 +155,55 @@ want the churn across 29 files.
     is probably to guard that block on the library version, so older libraries
     build with reduced functionality rather than not at all.
 
+- [ ] **Detect MacPorts or Homebrew on macOS rather than assuming MacPorts.**
+  `src/Makefile` has `DARWIN_PREFIX ?= /opt/local` as a hook, but a prefix alone
+  is not enough for Homebrew: its prefix varies by architecture
+  (`/opt/homebrew` vs `/usr/local`, both reported by `brew --prefix`) and it
+  keeps keg-only formulae outside that prefix entirely. `ncurses` is the
+  blocker — keg-only, and macOS ships no `libncursesw` of its own, so
+  `control`, `monitor`, `show-pkt` and `show-sig` fail to link without an
+  explicit `-I`/`-L` for it. `libiconv` is also keg-only but macOS provides its
+  own, so it likely resolves anyway.
+
+  Shape: detect `/opt/local/bin/port` first, else `brew --prefix`, and add the
+  keg-only pairs in the Homebrew case. Keep the two concerns separate — the
+  Makefile should *detect and adapt*, never install a package manager; only the
+  CI workflow should install MacPorts when neither is present, as it does now.
+  Unverified and needing a CI round trip: whether Homebrew's `fftw` ships
+  `libfftw3f_threads` under that name, and whether its `iniparser` matches what
+  the build expects.
+
+- [ ] **Decouple the per-platform build from the workflow.** The build commands
+  are already plain `make` / `gmake`, but everything around them —
+  dependency installation, the `ENABLE_*` flags, and the verification steps —
+  lives as inline YAML, seven `run:` blocks across jobs of 59 to 82 lines. A
+  developer cannot reproduce a CI run without transcribing it by hand.
+
+  Shape: extract per-platform scripts (`platform/ci/deps-<os>.sh`,
+  `platform/ci/verify-<os>.sh`, and the `ENABLE_*` set as data) and reduce each
+  job to calling them, so the same scripts run locally. The
+  `cmake-freebsd-build` branch already has a `scripts/setup.sh` worth looking at
+  as prior art. Note the honest limit: this makes the *commands* identical, not
+  the *environment* — runner images and package versions still differ, and the
+  libfobos and hydrasdr divergences above are exactly that class of difference.
+
+- [ ] **Add a smoke test after each build.** Linking successfully proves very
+  little; none of the three platforms has ever run a single binary. Worth
+  staging by cost and flakiness:
+
+  1. *Binaries execute.* `radiod -V` prints the version and exits `EX_OK`
+     (`src/main.c`, the `V` in its getopt string). Catches loader failures a
+     successful link does not — missing dylib, wrong rpath, unresolved lazy
+     symbol. Nearly free and not flaky; worth doing first and on every platform.
+  2. *`radiod` starts and stops.* `config/examples/radiod@siggen.conf` drives
+     the software signal generator, so no hardware is needed. Needs multicast
+     on loopback (`aux/set_lo_multicast` exists for this) and `advertise=no` to
+     avoid depending on a running mDNS daemon. Multicast behaviour differs
+     across the three platforms, so expect this to be where the flakiness is.
+  3. *A client observes data.* Point `powers` or `metadump` at the running
+     instance and assert non-empty output. Highest value — it proves the DSP
+     path works, not just that the process starts — and highest flakiness.
+
 - [ ] **Add an OpenBSD CI job**, mirroring the FreeBSD one via
   `vmactions/openbsd-vm`. Expect a smaller driver set: `docs/PORTABILITY.md`
   records only `hackrf` and `rtl-sdr` among the vendor libraries in OpenBSD
