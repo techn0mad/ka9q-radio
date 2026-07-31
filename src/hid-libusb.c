@@ -52,7 +52,7 @@
 #include <wchar.h>
 
 /* GNU / LibUSB */
-#include <libusb-1.0/libusb.h>
+#include "compat_libusb.h"
 #include "iconv.h"
 
 #include "hidapi.h"
@@ -263,26 +263,13 @@ static int get_usage(uint8_t *report_descriptor, size_t size,
 }
 #endif /* INVASIVE_GET_USAGE */
 
-#ifdef __FreeBSD__
-/* The FreeBSD version of libusb doesn't have this funciton. In mainline
-   libusb, it's inlined in libusb.h. This function will bear a striking
-   resemblence to that one, because there's about one way to code it.
-
-   Note that the data parameter is Unicode in UTF-16LE encoding.
-   Return value is the number of bytes in data, or LIBUSB_ERROR_*.
- */
-static inline int libusb_get_string_descriptor(libusb_device_handle *dev,
-	uint8_t descriptor_index, uint16_t lang_id,
-	unsigned char *data, int length)
-{
-	return libusb_control_transfer(dev,
-		LIBUSB_ENDPOINT_IN | 0x0, /* Endpoint 0 IN */
-		LIBUSB_REQUEST_GET_DESCRIPTOR,
-		(LIBUSB_DT_STRING << 8) | descriptor_index,
-		lang_id, data, (uint16_t) length, 1000);
-}
-
-#endif
+/* A local libusb_get_string_descriptor() used to be defined here under
+   #ifdef __FreeBSD__, on the premise that FreeBSD's libusb lacked it. That is
+   no longer true: FreeBSD base declares it in <libusb.h> and implements it in
+   lib/libusb/libusb10_desc.c. Redefining it as static inline on top of that
+   declaration is an error ("static declaration follows non-static
+   declaration"), so the block is gone. Mainline libusb has always provided it
+   inline in libusb.h, so no platform needs a local copy. */
 
 
 /* Get the first language the device says it reports. This comes from
