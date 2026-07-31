@@ -114,7 +114,22 @@ Two things do **not** translate cleanly, and the ports handle them explicitly:
 ## 5. Installing and enabling
 
 The `radio` service account and the config file (`/etc/radio/radiod@<instance>.conf`)
-are prerequisites on every platform. After `make install`:
+are prerequisites on every platform.
+
+`make install` creates the account by running `platform/create-radio-user`,
+which is skipped when `DESTDIR` is set (staged and package builds create it
+their own way). The account tooling is per-OS -- `groupadd`/`useradd` on Linux,
+`dscl` on macOS, `pw` on FreeBSD -- which is why it is a script rather than a
+line in the install target.
+
+The uid and gid are fixed at **55050** on every platform, matching
+`aux/radio.sysusers`, which the Debian packages install as
+`/etc/sysusers.d/radio.conf`. A stable id keeps file ownership consistent
+across hosts -- it matters for recordings on shared or NFS-mounted storage --
+and keeps a from-source install agreeing with a package install. The script is
+idempotent and leaves an existing account, including its ids, alone.
+
+After `make install`:
 
 **Linux (systemd)**
 ```sh

@@ -1,0 +1,112 @@
+#!/bin/sh
+#
+# Create the 'radio' system account that radiod and its helpers run as.
+#
+# Each OS has its own tooling for this -- addgroup/adduser on Debian, dscl on
+# macOS, pw on FreeBSD, groupadd/useradd on OpenBSD -- which is why this is a
+# script rather than a line in the install target.
+#
+# The identity is fixed rather than dynamically allocated, matching
+# aux/radio.sysusers (installed as /etc/sysusers.d/radio.conf by the Debian
+# packages). A stable uid/gid keeps ownership consistent across hosts, which
+# matters for recordings on shared or NFS-mounted storage, and keeps a
+# from-source install agreeing with a package install.
+#
+# Idempotent: an existing group or user is left alone, including its uid/gid.
+# Run as root. Unknown platforms are reported, not fatal, so the rest of
+# 'make install' still completes.
+
+set -eu
+
+RADIO_USER=radio
+RADIO_GROUP=radio
+RADIO_ID=55050
+RADIO_GECOS="ka9q-radio system"
+RADIO_HOME=/var/lib/ka9q-radio
+
+# First shell that actually exists; the path differs per OS and even per
+# distribution, and useradd on some systems rejects a nonexistent shell.
+pick_nologin() {
+	for candidate in /usr/sbin/nologin /sbin/nologin /usr/bin/false /bin/false; do
+		if [ -x "$candidate" ]; then
+			echo "$candidate"
+			return 0
+		fi
+	done
+	echo /bin/false
+}
+
+# getent is not universal; fall back to reading the flat files.
+group_exists() {
+	if command -v getent > /dev/null 2>&1; then
+		getent group "$RADIO_GROUP" > /dev/null 2>&1
+	else
+		grep -q "^$RADIO_GROUP:" /etc/group 2>/dev/null
+	fi
+}
+
+user_exists() {
+	if command -v getent > /dev/null 2>&1; then
+		getent passwd "$RADIO_USER" > /dev/null 2>&1
+	else
+		grep -q "^$RADIO_USER:" /etc/passwd 2>/dev/null
+	fi
+}
+
+if [ "$(id -u)" -ne 0 ]; then
+	echo "create-radio-user: must run as root" >&2
+	exit 1
+fi
+
+shell=$(pick_nologin)
+os=$(uname -s)
+
+case "$os" in
+Linux)
+	# groupadd/useradd are shadow-utils and present on Debian too, so prefer
+	# them over Debian's addgroup/adduser for wider reach.
+	group_exists || groupadd -r -g "$RADIO_ID" "$RADIO_GROUP"
+	user_exists || useradd -r -u "$RADIO_ID" -g "$RADIO_GROUP" \
+		-d "$RADIO_HOME" -M -s "$shell" -c "$RADIO_GECOS" "$RADIO_USER"
+	;;
+
+Darwin)
+	# No useradd; the directory service is edited directly. IsHidden keeps the
+	# account out of the login window and Users & Groups.
+	if ! dscl . -read "/Groups/$RADIO_GROUP" > /dev/null 2>&1; then
+		dscl . -create "/Groups/$RADIO_GROUP"
+		dscl . -create "/Groups/$RADIO_GROUP" PrimaryGroupID "$RADIO_ID"
+		dscl . -create "/Groups/$RADIO_GROUP" RealName "$RADIO_GECOS"
+	fi
+	if ! dscl . -read "/Users/$RADIO_USER" > /dev/null 2>&1; then
+		dscl . -create "/Users/$RADIO_USER"
+		dscl . -create "/Users/$RADIO_USER" UniqueID "$RADIO_ID"
+		dscl . -create "/Users/$RADIO_USER" PrimaryGroupID "$RADIO_ID"
+		dscl . -create "/Users/$RADIO_USER" RealName "$RADIO_GECOS"
+		dscl . -create "/Users/$RADIO_USER" NFSHomeDirectory "$RADIO_HOME"
+		dscl . -create "/Users/$RADIO_USER" UserShell "$shell"
+		dscl . -create "/Users/$RADIO_USER" IsHidden 1
+	fi
+	;;
+
+FreeBSD)
+	pw groupshow "$RADIO_GROUP" > /dev/null 2>&1 || \
+		pw groupadd "$RADIO_GROUP" -g "$RADIO_ID"
+	pw usershow "$RADIO_USER" > /dev/null 2>&1 || \
+		pw useradd "$RADIO_USER" -u "$RADIO_ID" -g "$RADIO_GROUP" \
+			-d "$RADIO_HOME" -s "$shell" -c "$RADIO_GECOS"
+	;;
+
+OpenBSD | NetBSD)
+	group_exists || groupadd -g "$RADIO_ID" "$RADIO_GROUP"
+	user_exists || useradd -u "$RADIO_ID" -g "$RADIO_GROUP" \
+		-d "$RADIO_HOME" -s "$shell" -c "$RADIO_GECOS" "$RADIO_USER"
+	;;
+
+*)
+	echo "create-radio-user: don't know how to create accounts on $os." >&2
+	echo "create-radio-user: create user and group '$RADIO_USER'" \
+		"(uid/gid $RADIO_ID, home $RADIO_HOME) by hand." >&2
+	exit 0
+	;;
+esac
