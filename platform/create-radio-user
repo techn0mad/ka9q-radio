@@ -110,3 +110,14 @@ OpenBSD | NetBSD)
 	exit 0
 	;;
 esac
+
+# Post-condition. Creating an account can report success without the account
+# actually appearing -- dscl on macOS is known to do this in some environments
+# -- and an install that silently lacks the account it needs produces a service
+# that cannot start, with nothing to explain why. id(1) resolves through the
+# platform's normal lookup path on all four systems, so it is the honest test.
+if ! id "$RADIO_USER" > /dev/null 2>&1; then
+	echo "create-radio-user: '$RADIO_USER' still does not exist after creation on $os." >&2
+	echo "create-radio-user: the account tooling reported success but nothing was created." >&2
+	exit 1
+fi

@@ -135,12 +135,17 @@ jobs:
           plutil -lint /usr/local/share/ka9q-radio/launchd/net.ka9q.radiod.plist
 
           echo "--- radio user and group ---"
-          # Expected to FAIL today: the top-level install target creates the
-          # radio user and group with getent/addgroup/adduser, which are
-          # Debian-only. The launchd plist references this account, so the
-          # gap is real rather than cosmetic. See docs/PORTABLE-INIT.md.
-          dscl . -list /Groups | grep -qx radio
-          dscl . -list /Users | grep -qx radio
+          # id(1) is the same check platform/create-radio-user makes after
+          # creating the account, and it resolves through the normal lookup
+          # path rather than reading the directory directly. On failure, dump
+          # what the directory actually holds -- the previous silent
+          # `dscl ... | grep -qx` told us only that something was wrong.
+          if ! id radio; then
+            echo "radio account missing after install; directory contents:"
+            dscl . -list /Groups | grep -i radio || echo "  no matching group"
+            dscl . -list /Users  | grep -i radio || echo "  no matching user"
+            exit 1
+          fi
 
   freebsd:
     name: FreeBSD 14.2 / rc.d
