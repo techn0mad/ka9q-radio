@@ -32,7 +32,7 @@ can be installed. Cells move to "**built**" when CI has actually compiled them.
 | `airspy`   | `libairspy`     | built | pkg | pkg `comms/airspy`   | no [^1] |
 | `airspyhf` | `libairspyhf`   | built | pkg | pkg `comms/airspyhf` | no [^1] |
 | `bladerf`  | `libbladeRF`    | built | no [^2] | pkg `comms/bladerf` | no [^1] |
-| `fobos`    | `libfobos`      | built [^3] | no [^1] | pkg `comms/libfobos` | no [^1] |
+| `fobos`    | `libfobos`      | built [^3] | no [^1] | no [^5] | no [^1] |
 | `funcube`  | `portaudio`, `libusb` | built | pkg | pkg | pkg |
 | `hackrf`   | `libhackrf`, `libusb` | built | pkg | pkg `comms/hackrf` | pkg `comms/hackrf` |
 | `hydrasdr` | `libhydrasdr`   | built [^3] | no [^1] | pkg `comms/hydrasdr` | no [^1] |
@@ -49,6 +49,12 @@ can be installed. Cells move to "**built**" when CI has actually compiled them.
     alongside it.
 [^3]: `libfobos-dev` and `libhydrasdr-dev` are not in the stock Debian/Ubuntu
     archive. They come from KA9Q's own repository — see `docs/INSTALL.md`.
+[^5]: The library is packaged (`comms/libfobos`), but it is version 2.3.2,
+    whose `fobos_rx_close()` takes a second `do_reset` argument. `src/fobos.c`
+    is written against the older one-argument API that Ubuntu gets from KA9Q's
+    repository, so all six call sites fail to compile. Disabled in CI; see
+    `TODO.md`.
+
 [^4]: `ENABLE_SDRPLAY` defaults to `0` everywhere. The SDRplay API is
     proprietary and not redistributable through any packaging system.
 
@@ -66,8 +72,10 @@ using, and the one `src/Makefile` expects on Darwin (`DARWIN_PREFIX`, default
 build-verified yet — the CI job has not gotten past dependency installation, and
 `docs/notes.md` notes that `radiod` itself has never been run on macOS.
 
-**FreeBSD** has the best non-Linux coverage: every driver library is in the
-ports tree, including the three missing on macOS. No build has been attempted.
+**FreeBSD** has the broadest non-Linux library coverage: every driver library is
+in the ports tree, including the three missing on macOS. One of them, `libfobos`,
+is a newer release whose API `src/fobos.c` does not match, so that driver is
+disabled pending the fix noted in `TODO.md`.
 
 **OpenBSD** packages only `hackrf` and `rtl-sdr` among the vendor libraries, so
 it is limited to those plus the drivers that need nothing beyond `libusb`,

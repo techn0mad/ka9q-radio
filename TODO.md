@@ -114,6 +114,15 @@ want the churn across 29 files.
   where the library is `libusb.so` — if there is no `-1.0` alias, that needs a
   FreeBSD-specific `-lusb`.
 
+- [ ] **Resolve the libfobos API divergence.** `src/fobos.c` calls
+  `fobos_rx_close(dev)` with one argument. FreeBSD's `comms/libfobos` is 2.3.2,
+  whose header declares `fobos_rx_close(struct fobos_dev_t *dev, int do_reset)`,
+  so all six call sites fail to compile there. Ubuntu gets an older libfobos
+  from KA9Q's own repository, which is why this has never surfaced. The driver
+  is disabled in the FreeBSD CI job for now. There is no version macro in
+  `fobos.h` to guard on, so resolving it properly means either pinning a
+  libfobos version or detecting the arity at build time.
+
 - [ ] **Add an OpenBSD CI job**, mirroring the FreeBSD one via
   `vmactions/openbsd-vm`. Expect a smaller driver set: `docs/PORTABILITY.md`
   records only `hackrf` and `rtl-sdr` among the vendor libraries in OpenBSD
