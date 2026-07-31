@@ -46,6 +46,50 @@ also shrinks what the portability branches have to carry.
 
 ---
 
+## `src/` surface touched on this branch
+
+33 files, +118/-63 against `main`. Almost all of it is one-line header changes;
+the substance is in four places. Recorded here so the upstream split above can
+be carved out without re-deriving what each change was for.
+
+| Change | Files | Size | Nature |
+|--------|-------|------|--------|
+| `src/Makefile` — `DARWIN_PREFIX`, `$(LDFLAGS)` on `.so` rules, FreeBSD arm | 1 | +37/-14 | build system |
+| New shim headers `compat_net.h`, `compat_libusb.h` | 2 | +36 | new files |
+| `compat_net.h` adoption | 24 | 1 line each | mechanical |
+| `compat_libusb.h` adoption | 4 | 1 line each | mechanical |
+| `avahi.h` provider-neutral interface | 1 | +10/-9 | upstream candidate |
+| `hid-libusb.c` stale FreeBSD block removed | 1 | +8/-21 | upstream candidate |
+| `radio.c` unused uuid include removed | 1 | -1 | upstream candidate |
+
+Detail on the two mechanical groups, since they account for most of the file
+count:
+
+- **`compat_net.h`** — 15 files had `#include <sys/socket.h>` swapped for it;
+  9 more had it added because they use socket types without including the
+  header at all. Glibc pulls `<netinet/in.h>` and `<arpa/inet.h>` in
+  transitively, so on Linux `<sys/socket.h>` alone happens to suffice; FreeBSD
+  does not, and `aprs.c` failed on an undeclared `IPPROTO_UDP`. The nine-file
+  addition list came from the `cmake-freebsd-build` branch, which hit the same
+  wall.
+
+- **`compat_libusb.h`** — 4 files (`ezusb.h`, `hid-libusb.c`, `rx888.c`,
+  `rx888_boot.c`). Linux and MacPorts install the header as
+  `<libusb-1.0/libusb.h>`; FreeBSD ships libusb in base at `<libusb.h>`, with
+  no subdirectory.
+
+Both shims are deliberately independent of `ka9q_config.h`, unlike their
+counterparts on `cmake-freebsd-build`, so they work in the Makefile build
+without a generated configuration header. If the CMake work is ever merged with
+this branch, the two versions of each file need reconciling.
+
+Whether the shims themselves belong upstream is a separate question from the
+four bugs above. They fix real latent portability problems, but nothing upstream
+currently builds on a platform that trips them, so upstream may reasonably not
+want the churn across 28 files.
+
+---
+
 ## Portability work in progress
 
 - [ ] **Finish the FreeBSD build.** Compiling is nearly there; linking is
