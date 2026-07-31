@@ -49,19 +49,22 @@ export DEB_BUILD_ARCH
 # Init-system integration is platform-specific. systemd units live in service/
 # (with udev rules/); other service managers live under platform/<os>/. Exactly
 # one is built and installed. Override the auto choice with
-# INIT_SYSTEM=systemd|launchd|freebsd-rc|openbsd-rc|none.
+# INIT_SYSTEM=auto|systemd|launchd|freebsd-rc|openbsd-rc|none.
+# 'override' is required: a command-line INIT_SYSTEM= otherwise wins over these
+# assignments, so an explicit INIT_SYSTEM=auto would survive unresolved and
+# select nothing.
 INIT_SYSTEM ?= auto
 ifeq ($(INIT_SYSTEM),auto)
   ifeq ($(UNAME_S),Linux)
-    INIT_SYSTEM = systemd
+    override INIT_SYSTEM = systemd
   else ifeq ($(UNAME_S),Darwin)
-    INIT_SYSTEM = launchd
+    override INIT_SYSTEM = launchd
   else ifeq ($(UNAME_S),FreeBSD)
-    INIT_SYSTEM = freebsd-rc
+    override INIT_SYSTEM = freebsd-rc
   else ifeq ($(UNAME_S),OpenBSD)
-    INIT_SYSTEM = openbsd-rc
+    override INIT_SYSTEM = openbsd-rc
   else
-    INIT_SYSTEM = none
+    override INIT_SYSTEM = none
   endif
 endif
 
@@ -73,8 +76,10 @@ else ifeq ($(INIT_SYSTEM),freebsd-rc)
   INIT_SUBDIRS = platform/freebsd
 else ifeq ($(INIT_SYSTEM),openbsd-rc)
   INIT_SUBDIRS = platform/openbsd
-else
+else ifeq ($(INIT_SYSTEM),none)
   INIT_SUBDIRS =
+else
+  $(error unknown INIT_SYSTEM '$(INIT_SYSTEM)'; expected one of: auto systemd launchd freebsd-rc openbsd-rc none)
 endif
 
 SUBDIRS=src aux share $(INIT_SUBDIRS) docs config
