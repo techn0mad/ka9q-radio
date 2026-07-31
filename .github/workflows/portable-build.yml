@@ -164,10 +164,13 @@ jobs:
           # including the three MacPorts lacks, so no ENABLE_* flags are needed
           # here -- the full default driver set should build.
           # libusb is in the FreeBSD base system, not a package.
+          # Note bladeRF's capitalization: the port lives in comms/bladerf but
+          # sets PORTNAME=bladeRF, so that is the package name. Every other
+          # package here matches its port directory.
           prepare: |
             pkg install -y gmake pkgconf fftw3-float iniparser opus libogg \
               portaudio libsamplerate airspy airspyhf hackrf rtl-sdr \
-              hydrasdr libfobos bladerf
+              hydrasdr libfobos bladeRF
           # This block runs as root inside the VM, so no sudo.
           run: |
             set -e
