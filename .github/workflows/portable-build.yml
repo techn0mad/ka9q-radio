@@ -178,6 +178,13 @@ jobs:
           run: |
             set -e
 
+            # The workspace is owned by the host's runner user but this block
+            # executes as root, so git refuses it as "dubious ownership" and
+            # every git call in src/Makefile's config_paths.h rule fails. That
+            # is not fatal -- it just bakes empty GIT_HASH, GIT_VERSION and
+            # friends into the binary -- so it has to be caught deliberately.
+            git config --global --add safe.directory "$(pwd)"
+
             echo "--- build configuration ---"
             uname -a
             cc --version | head -1
@@ -188,6 +195,11 @@ jobs:
 
             echo "--- make ---"
             gmake -j"$(sysctl -n hw.ncpu)"
+
+            echo "--- version metadata ---"
+            grep -E 'GIT_(HASH|VERSION)' src/config_paths.h
+            # An empty GIT_VERSION means the git calls above silently failed.
+            grep -qE '^#define GIT_VERSION "..*"' src/config_paths.h
 
             echo "--- make install ---"
             gmake install
