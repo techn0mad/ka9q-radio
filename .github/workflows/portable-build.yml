@@ -160,12 +160,15 @@ jobs:
           # Nothing needs to come back to the host; skipping the sync back
           # saves the whole return trip.
           copyback: false
-          # Every driver library ka9q uses is in the FreeBSD ports tree, but
-          # comms/libfobos is 2.3.2, whose fobos_rx_close() takes a second
-          # do_reset argument. ka9q's fobos.c is written against the older
-          # one-argument API that Ubuntu gets from KA9Q's own repository, so
-          # fobos is disabled here until that divergence is resolved. See
-          # TODO.md. libusb is in the FreeBSD base system, not a package.
+          # Every driver library ka9q uses is in the FreeBSD ports tree, but two
+          # are at versions this source does not match, so they are disabled
+          # here (see TODO.md):
+          #   libfobos  -- port is 2.3.2, whose fobos_rx_close() takes a second
+          #                do_reset argument; fobos.c calls it with one.
+          #   hydrasdr  -- port is 1.0.3, but hydrasdr.c requires 1.1.0, which
+          #                it states itself as MIN_LIB_VERSION.
+          # Ubuntu gets both from KA9Q's own repository at versions that match.
+          # libusb is in the FreeBSD base system, not a package.
           # Note bladeRF's capitalization: the port lives in comms/bladerf but
           # sets PORTNAME=bladeRF, so that is the package name. Every other
           # package here matches its port directory.
@@ -179,7 +182,7 @@ jobs:
           # This block runs as root inside the VM, so no sudo.
           run: |
             set -e
-            ENABLE_FLAGS="ENABLE_FOBOS=0"
+            ENABLE_FLAGS="ENABLE_FOBOS=0 ENABLE_HYDRASDR=0"
 
             # The workspace is owned by the host's runner user but this block
             # executes as root, so git refuses it as "dubious ownership" and

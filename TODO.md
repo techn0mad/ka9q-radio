@@ -137,14 +137,23 @@ want the churn across 29 files.
   where the library is `libusb.so` — if there is no `-1.0` alias, that needs a
   FreeBSD-specific `-lusb`.
 
-- [ ] **Resolve the libfobos API divergence.** `src/fobos.c` calls
-  `fobos_rx_close(dev)` with one argument. FreeBSD's `comms/libfobos` is 2.3.2,
-  whose header declares `fobos_rx_close(struct fobos_dev_t *dev, int do_reset)`,
-  so all six call sites fail to compile there. Ubuntu gets an older libfobos
-  from KA9Q's own repository, which is why this has never surfaced. The driver
-  is disabled in the FreeBSD CI job for now. There is no version macro in
-  `fobos.h` to guard on, so resolving it properly means either pinning a
-  libfobos version or detecting the arity at build time.
+- [ ] **Resolve two vendor-library version divergences on FreeBSD.** Both
+  drivers are packaged there, just not at versions this source matches, and
+  both are disabled in the FreeBSD CI job for now. Ubuntu gets both from KA9Q's
+  own repository at matching versions, which is why neither has surfaced
+  before.
+
+  - `libfobos` — the port is 2.3.2, whose `fobos_rx_close()` takes a second
+    `do_reset` argument; `src/fobos.c` calls it with one at six sites. There is
+    no version macro in `fobos.h` to guard on, so resolving it means either
+    pinning a libfobos version or detecting the arity at build time.
+  - `hydrasdr` — the port is 1.0.3, but `src/hydrasdr.c` requires 1.1.0 and
+    says so itself (`MIN_LIB_VERSION HYDRASDR_MAKE_VERSION(1, 1, 0)`). It uses
+    symbols absent from 1.0.3 — `hydrasdr_device_info_t`,
+    `hydrasdr_get_device_info`, the `HYDRASDR_CAP_*` constants — so it cannot
+    compile far enough to reach its own runtime version check. The cleanest fix
+    is probably to guard that block on the library version, so older libraries
+    build with reduced functionality rather than not at all.
 
 - [ ] **Add an OpenBSD CI job**, mirroring the FreeBSD one via
   `vmactions/openbsd-vm`. Expect a smaller driver set: `docs/PORTABILITY.md`
@@ -167,6 +176,12 @@ want the churn across 29 files.
   the shared `COPTS`, so it is really a question about the whole
   `-funsafe-math-optimizations` / `-fno-trapping-math` group and belongs with
   whoever revisits those flags.
+
+- [ ] **`iconv` prototype mismatch in `hid-libusb.c`.** FreeBSD's `iconv()`
+  takes `char **inbuf`; the call passes a `const char **`, producing
+  `-Wincompatible-pointer-types-discards-qualifiers`. A warning only, and the
+  conversion is harmless in practice, but it is the kind of thing that becomes
+  an error under a stricter compiler default.
 
 - [ ] **`table_compare` is an inconsistent comparator** — `src/mdns.c` on
   `portable-dns_sd`, copied verbatim from `src/avahi_browse.c` upstream. It

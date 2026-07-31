@@ -35,7 +35,7 @@ can be installed. Cells move to "**built**" when CI has actually compiled them.
 | `fobos`    | `libfobos`      | built [^3] | no [^1] | no [^5] | no [^1] |
 | `funcube`  | `portaudio`, `libusb` | built | pkg | pkg | pkg |
 | `hackrf`   | `libhackrf`, `libusb` | built | pkg | pkg `comms/hackrf` | pkg `comms/hackrf` |
-| `hydrasdr` | `libhydrasdr`   | built [^3] | no [^1] | pkg `comms/hydrasdr` | no [^1] |
+| `hydrasdr` | `libhydrasdr`   | built [^3] | no [^1] | no [^6] | no [^1] |
 | `rtlsdr`   | `librtlsdr`     | built | pkg | pkg `comms/rtl-sdr`  | pkg `comms/rtl-sdr` |
 | `rx888`    | `libusb`        | built | pkg | pkg | pkg |
 | `sdrplay`  | `libsdrplay_api`| off [^4] | off [^4] | off [^4] | off [^4] |
@@ -55,6 +55,12 @@ can be installed. Cells move to "**built**" when CI has actually compiled them.
     repository, so all six call sites fail to compile. Disabled in CI; see
     `TODO.md`.
 
+[^6]: Packaged as `comms/hydrasdr`, but at version 1.0.3. `src/hydrasdr.c`
+    requires 1.1.0 -- it says so itself, as `MIN_LIB_VERSION
+    HYDRASDR_MAKE_VERSION(1, 1, 0)` -- and uses symbols absent from 1.0.3, so
+    it cannot compile far enough to reach its own runtime version check.
+    Disabled in CI; see `TODO.md`.
+
 [^4]: `ENABLE_SDRPLAY` defaults to `0` everywhere. The SDRplay API is
     proprietary and not redistributable through any packaging system.
 
@@ -73,9 +79,9 @@ build-verified yet — the CI job has not gotten past dependency installation, a
 `docs/notes.md` notes that `radiod` itself has never been run on macOS.
 
 **FreeBSD** has the broadest non-Linux library coverage: every driver library is
-in the ports tree, including the three missing on macOS. One of them, `libfobos`,
-is a newer release whose API `src/fobos.c` does not match, so that driver is
-disabled pending the fix noted in `TODO.md`.
+in the ports tree, including the three missing on macOS. Two of them are at versions this
+source does not match -- `libfobos` newer, `hydrasdr` older -- so those drivers
+are disabled pending the fixes noted in `TODO.md`.
 
 **OpenBSD** packages only `hackrf` and `rtl-sdr` among the vendor libraries, so
 it is limited to those plus the drivers that need nothing beyond `libusb`,
