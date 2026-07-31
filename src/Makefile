@@ -53,8 +53,20 @@ ifdef SANITIZE
 endif
 
 ifeq ($(UNAME_S),Darwin)
-  INCLUDES += -I/opt/local/include
-  LDFLAGS  += -L/opt/local/lib
+  # Prefix of the package manager supplying the dependencies. MacPorts (the
+  # default, and what docs/notes.md records upstream as using) puts everything
+  # under one prefix, so this is all that is needed there.
+  #
+  # Homebrew is not yet supported: its prefix varies by architecture
+  # (/opt/homebrew on Apple Silicon, /usr/local on Intel, both reported by
+  # `brew --prefix`), and it keeps keg-only formulae outside that prefix.
+  # ncurses is the blocker -- it is keg-only and macOS ships no libncursesw of
+  # its own, so control/monitor/show-pkt/show-sig would fail to link on
+  # -lncursesw. Adding Homebrew means setting this and adding an -I/-L pair
+  # for each keg-only formula.
+  DARWIN_PREFIX ?= /opt/local
+  INCLUDES += -I$(DARWIN_PREFIX)/include
+  LDFLAGS  += -L$(DARWIN_PREFIX)/lib
   LDLIBS += -lintl -liconv
   SOFLAGS += -bundle -Wl,-undefined,dynamic_lookup
 else
