@@ -132,10 +132,10 @@ want the churn across 29 files.
 
 ## Portability work in progress
 
-- [ ] **Finish the FreeBSD build.** Compiling is nearly there; linking is
-  untested. `src/Makefile` links `-lusb-1.0`, and FreeBSD ships libusb in base
-  where the library is `libusb.so` — if there is no `-1.0` alias, that needs a
-  FreeBSD-specific `-lusb`.
+- [x] **Finish the FreeBSD build.** Done — FreeBSD builds and installs cleanly
+  in CI, with eight of the eleven drivers enabled (`fobos` and `hydrasdr`
+  disabled for the version divergences above, `sdrplay` off everywhere).
+  `docs/PORTABILITY.md`'s FreeBSD column has moved from `pkg` to `built`.
 
 - [ ] **Resolve two vendor-library version divergences on FreeBSD.** Both
   drivers are packaged there, just not at versions this source matches, and
@@ -160,10 +160,10 @@ want the churn across 29 files.
   records only `hackrf` and `rtl-sdr` among the vendor libraries in OpenBSD
   ports.
 
-- [ ] **Update `docs/PORTABILITY.md` as CI proves cells.** The macOS and
-  FreeBSD columns still read `pkg` (library packaged, build unverified). They
-  may only move to `built` once the workflow actually compiles those drivers on
-  that platform — that rule is the whole point of the table.
+- [ ] **Update `docs/PORTABILITY.md` as CI proves cells.** FreeBSD is done. The
+  macOS column still reads `pkg` (library packaged, build unverified) and may
+  only move to `built` once a green macOS run confirms those drivers actually
+  compile there — that rule is the whole point of the table.
 
 ---
 

@@ -29,17 +29,17 @@ can be installed. Cells move to "**built**" when CI has actually compiled them.
 
 | Driver | Links against | Linux (Debian/Ubuntu) | macOS (MacPorts) | FreeBSD (ports) | OpenBSD (ports) |
 |--------|---------------|-----------------------|------------------|-----------------|-----------------|
-| `airspy`   | `libairspy`     | built | pkg | pkg `comms/airspy`   | no [^1] |
-| `airspyhf` | `libairspyhf`   | built | pkg | pkg `comms/airspyhf` | no [^1] |
-| `bladerf`  | `libbladeRF`    | built | no [^2] | pkg `comms/bladerf` | no [^1] |
+| `airspy`   | `libairspy`     | built | pkg | built | no [^1] |
+| `airspyhf` | `libairspyhf`   | built | pkg | built | no [^1] |
+| `bladerf`  | `libbladeRF`    | built | no [^2] | built | no [^1] |
 | `fobos`    | `libfobos`      | built [^3] | no [^1] | no [^5] | no [^1] |
-| `funcube`  | `portaudio`, `libusb` | built | pkg | pkg | pkg |
-| `hackrf`   | `libhackrf`, `libusb` | built | pkg | pkg `comms/hackrf` | pkg `comms/hackrf` |
+| `funcube`  | `portaudio`, `libusb` | built | pkg | built | pkg |
+| `hackrf`   | `libhackrf`, `libusb` | built | pkg | built | pkg `comms/hackrf` |
 | `hydrasdr` | `libhydrasdr`   | built [^3] | no [^1] | no [^6] | no [^1] |
-| `rtlsdr`   | `librtlsdr`     | built | pkg | pkg `comms/rtl-sdr`  | pkg `comms/rtl-sdr` |
-| `rx888`    | `libusb`        | built | pkg | pkg | pkg |
+| `rtlsdr`   | `librtlsdr`     | built | pkg | built | pkg `comms/rtl-sdr` |
+| `rx888`    | `libusb`        | built | pkg | built | pkg |
 | `sdrplay`  | `libsdrplay_api`| off [^4] | off [^4] | off [^4] | off [^4] |
-| `sig_gen`  | `libsamplerate` | built | pkg | pkg | pkg |
+| `sig_gen`  | `libsamplerate` | built | pkg | built | pkg |
 
 [^1]: No port exists in that platform's ports tree.
 [^2]: A port exists, but MacPorts' `bladeRF` lists `tecla` in `depends_lib` and
@@ -78,10 +78,11 @@ using, and the one `src/Makefile` expects on Darwin (`DARWIN_PREFIX`, default
 build-verified yet — the CI job has not gotten past dependency installation, and
 `docs/notes.md` notes that `radiod` itself has never been run on macOS.
 
-**FreeBSD** has the broadest non-Linux library coverage: every driver library is
-in the ports tree, including the three missing on macOS. Two of them are at versions this
-source does not match -- `libfobos` newer, `hydrasdr` older -- so those drivers
-are disabled pending the fixes noted in `TODO.md`.
+**FreeBSD** builds and installs cleanly, verified by CI, and has the broadest
+non-Linux library coverage: every driver library is in the ports tree,
+including the three missing on macOS. Two are at versions this source does not
+match -- `libfobos` newer, `hydrasdr` older -- so those drivers are disabled
+pending the fixes noted in `TODO.md`. The other eight build.
 
 **OpenBSD** packages only `hackrf` and `rtl-sdr` among the vendor libraries, so
 it is limited to those plus the drivers that need nothing beyond `libusb`,
