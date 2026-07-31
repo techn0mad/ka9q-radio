@@ -69,6 +69,17 @@ ifeq ($(UNAME_S),Darwin)
   LDFLAGS  += -L$(DARWIN_PREFIX)/lib
   LDLIBS += -lintl -liconv
   SOFLAGS += -bundle -Wl,-undefined,dynamic_lookup
+else ifeq ($(UNAME_S),FreeBSD)
+  # Ports and packages install under /usr/local, which -- unlike /usr on Linux
+  # -- is not on the compiler's default search path, so headers and libraries
+  # there have to be pointed at explicitly.
+  FREEBSD_PREFIX ?= /usr/local
+  INCLUDES += -I$(FREEBSD_PREFIX)/include
+  LDFLAGS  += -L$(FREEBSD_PREFIX)/lib
+  # No -lbsd: strlcpy and friends are in libc here, and every <bsd/string.h>
+  # include in the tree is already guarded by #if defined(linux). No -lrt
+  # either; its contents are in libc.
+  SOFLAGS += -shared
 else
   LDLIBS += -lbsd -lrt
   SOFLAGS += -shared

@@ -13,7 +13,7 @@
 #include <bsd/string.h>
 #endif
 #include <string.h>
-#include <sys/socket.h>
+#include "compat_net.h"
 #include <locale.h>
 #include <errno.h>
 #include <ctype.h>

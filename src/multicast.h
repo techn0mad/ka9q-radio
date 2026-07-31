@@ -5,7 +5,7 @@
 #define _MULTICAST_H 1
 #include <stdint.h>
 #include <stdbool.h>
-#include <sys/socket.h>
+#include "compat_net.h"
 #include <netdb.h>
 #include <assert.h>
 

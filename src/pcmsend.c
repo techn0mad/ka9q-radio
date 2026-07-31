@@ -12,7 +12,7 @@
 #include <unistd.h>
 #include <limits.h>
 #include <string.h>
-#include <sys/socket.h>
+#include "compat_net.h"
 #include <sys/time.h>
 #include <sys/resource.h>
 #include <portaudio.h>

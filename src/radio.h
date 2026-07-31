@@ -9,7 +9,7 @@
 #include <pthread.h>
 #include <complex.h>
 
-#include <sys/socket.h>
+#include "compat_net.h"
 #include <stdint.h>
 #include <stdbool.h>
 #include <limits.h>

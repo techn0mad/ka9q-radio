@@ -22,7 +22,7 @@
 #include <poll.h>
 #include <fcntl.h>
 #include <time.h>
-#include <sys/socket.h>
+#include "compat_net.h"
 #include <stdatomic.h>
 #include <signal.h>
 

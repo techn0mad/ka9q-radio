@@ -20,7 +20,7 @@
 #undef I
 #include <sys/time.h>
 #include <ctype.h>
-#include <sys/socket.h>
+#include "compat_net.h"
 #include <netdb.h>
 #include <locale.h>
 #include <sysexits.h>

@@ -167,8 +167,11 @@ jobs:
           # Note bladeRF's capitalization: the port lives in comms/bladerf but
           # sets PORTNAME=bladeRF, so that is the package name. Every other
           # package here matches its port directory.
+          # git is needed by src/Makefile's config_paths.h rule, which embeds
+          # git describe output; without it the build emits "git: not found"
+          # and bakes in an empty version string.
           prepare: |
-            pkg install -y gmake pkgconf fftw3-float iniparser opus libogg \
+            pkg install -y git gmake pkgconf fftw3-float iniparser opus libogg \
               portaudio libsamplerate airspy airspyhf hackrf rtl-sdr \
               hydrasdr libfobos bladeRF
           # This block runs as root inside the VM, so no sudo.

@@ -17,6 +17,7 @@
 #include <getopt.h>
 #include <sysexits.h>
 
+#include "compat_net.h"
 #include "osc.h"
 #include "filter.h"
 #include "misc.h"

@@ -12,7 +12,7 @@
 #include <net/if.h>
 #include <limits.h>
 #include <sys/types.h>
-#include <sys/socket.h>
+#include "compat_net.h"
 #include <sys/un.h>
 #include <sys/ioctl.h>
 #include <ifaddrs.h>

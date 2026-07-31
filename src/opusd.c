@@ -35,6 +35,7 @@
 #include <sysexits.h>
 #include <fcntl.h>
 
+#include "compat_net.h"
 #include "misc.h"
 #include "multicast.h"
 #include "rtp.h"

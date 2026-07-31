@@ -14,6 +14,7 @@
 #include <sys/file.h>
 #include <stdbool.h>
 #include <ctype.h>
+#include "compat_net.h"
 #include "misc.h"
 #include "avahi.h"
 

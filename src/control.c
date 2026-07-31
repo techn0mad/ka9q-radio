@@ -26,7 +26,7 @@
 #include <sys/select.h>
 #include <ncurses.h>
 #include <ctype.h>
-#include <sys/socket.h>
+#include "compat_net.h"
 #include <netdb.h>
 #include <locale.h>
 #include <signal.h>
