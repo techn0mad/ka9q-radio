@@ -209,10 +209,9 @@ want the churn across 29 files.
   records only `hackrf` and `rtl-sdr` among the vendor libraries in OpenBSD
   ports.
 
-- [ ] **Update `docs/PORTABILITY.md` as CI proves cells.** FreeBSD is done. The
-  macOS column still reads `pkg` (library packaged, build unverified) and may
-  only move to `built` once a green macOS run confirms those drivers actually
-  compile there — that rule is the whole point of the table.
+- [x] **Update `docs/PORTABILITY.md` as CI proves cells.** Done for the three
+  platforms with CI: Linux (10 drivers), FreeBSD (8) and macOS (7) all read
+  `built`. Only OpenBSD still shows `pkg`, and it has no CI job yet.
 
 ---
 

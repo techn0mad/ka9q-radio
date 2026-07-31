@@ -29,17 +29,17 @@ can be installed. Cells move to "**built**" when CI has actually compiled them.
 
 | Driver | Links against | Linux (Debian/Ubuntu) | macOS (MacPorts) | FreeBSD (ports) | OpenBSD (ports) |
 |--------|---------------|-----------------------|------------------|-----------------|-----------------|
-| `airspy`   | `libairspy`     | built | pkg | built | no [^1] |
-| `airspyhf` | `libairspyhf`   | built | pkg | built | no [^1] |
+| `airspy`   | `libairspy`     | built | built | built | no [^1] |
+| `airspyhf` | `libairspyhf`   | built | built | built | no [^1] |
 | `bladerf`  | `libbladeRF`    | built | no [^2] | built | no [^1] |
 | `fobos`    | `libfobos`      | built [^3] | no [^1] | no [^5] | no [^1] |
-| `funcube`  | `portaudio`, `libusb` | built | pkg | built | pkg |
-| `hackrf`   | `libhackrf`, `libusb` | built | pkg | built | pkg `comms/hackrf` |
+| `funcube`  | `portaudio`, `libusb` | built | built | built | pkg |
+| `hackrf`   | `libhackrf`, `libusb` | built | built | built | pkg `comms/hackrf` |
 | `hydrasdr` | `libhydrasdr`   | built [^3] | no [^1] | no [^6] | no [^1] |
-| `rtlsdr`   | `librtlsdr`     | built | pkg | built | pkg `comms/rtl-sdr` |
-| `rx888`    | `libusb`        | built | pkg | built | pkg |
+| `rtlsdr`   | `librtlsdr`     | built | built | built | pkg `comms/rtl-sdr` |
+| `rx888`    | `libusb`        | built | built | built | pkg |
 | `sdrplay`  | `libsdrplay_api`| off [^4] | off [^4] | off [^4] | off [^4] |
-| `sig_gen`  | `libsamplerate` | built | pkg | built | pkg |
+| `sig_gen`  | `libsamplerate` | built | built | built | pkg |
 
 [^1]: No port exists in that platform's ports tree.
 [^2]: A port exists, but MacPorts' `bladeRF` lists `tecla` in `depends_lib` and
@@ -72,11 +72,14 @@ can be installed. Cells move to "**built**" when CI has actually compiled them.
 whole matrix is verified. The CI job adds KA9Q's apt repository so the full
 default driver set builds.
 
-**macOS** uses MacPorts, the environment `docs/notes.md` records upstream as
-using, and the one `src/Makefile` expects on Darwin (`DARWIN_PREFIX`, default
-`/opt/local`). Three drivers are unavailable. Nothing in the macOS column is
-build-verified yet — the CI job has not gotten past dependency installation, and
-`docs/notes.md` notes that `radiod` itself has never been run on macOS.
+**macOS** builds and installs cleanly, verified by CI, using MacPorts — the
+environment `docs/notes.md` records upstream as using, and the one
+`src/Makefile` expects on Darwin (`DARWIN_PREFIX`, default `/opt/local`). Three
+drivers are unavailable, and the other seven build. Note this is further than
+upstream has gone: `docs/notes.md` records building only `monitor` and
+`control` on macOS, and never running `radiod` there. CI builds and installs
+all of it, though nothing has yet been *executed* — see the smoke-test item in
+`TODO.md`.
 
 **FreeBSD** builds and installs cleanly, verified by CI, and has the broadest
 non-Linux library coverage: every driver library is in the ports tree,
