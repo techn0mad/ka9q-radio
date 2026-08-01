@@ -51,7 +51,7 @@ jobs:
             libiniparser-dev libliquid-dev libncurses5-dev libncursesw5-dev \
             libogg-dev libopus-dev librtlsdr-dev libsamplerate-dev \
             libusb-1.0-0-dev libusb-dev portaudio19-dev libasound2-dev \
-            uuid-dev rsync
+            rsync
 
       - name: Show build configuration
         # -q so printing the variable database does not also run the default
