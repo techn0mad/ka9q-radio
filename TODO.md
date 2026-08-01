@@ -64,6 +64,34 @@ also shrinks what the portability branches have to carry.
   now collides with the system declaration and breaks the build on the one
   platform it was written to support.
 
+- [ ] **The version string requires a git checkout** — `src/Makefile:377`,
+  not yet fixed on any branch. The `config_paths.h` rule runs six `git`
+  commands with no fallback, baking `GIT_HASH`, `GIT_TIME`, `GIT_BRANCH`,
+  `GIT_SUMMARY`, `GIT_VERSION` and `GIT_REMOTE_URL` into the binary.
+  `misc.h`'s `VERSION()` macro prints them, and that is the whole of what
+  `radiod -V` reports.
+
+  Build from a release tarball and there is no `.git`, so all six fail and the
+  binary reports empty strings. The build does not fail -- the `printf` still
+  writes `#define GIT_VERSION ""` -- which is what makes it easy to miss. This
+  already surfaced on FreeBSD CI, where the symptom was `git: not found` and
+  the fix was to install git rather than to stop needing it.
+
+  It matters beyond tidiness because every packaging system builds from exactly
+  such a tarball, so a binary that cannot identify itself is what any
+  downstream package would ship, and version is the first thing asked for in a
+  bug report. There is no `VERSION` file to fall back on; `debian/changelog`'s
+  top line (`ka9q-radio (2026.08.01-1-trixie1) ...`) is the only version in the
+  tree that does not come from git. Shape: keep the git values when
+  `git rev-parse` succeeds, otherwise fall back to a `VERSION` file or the
+  changelog, so a tarball build still names itself.
+
+  Same rule, separate defect worth mentioning to whoever touches it: the
+  prerequisite is `config_paths.h: Makefile`, so the git values are captured at
+  first build and never refreshed on later commits unless `Makefile` changes or
+  the tree is cleaned. In a working checkout the reported hash can silently be
+  stale.
+
 ---
 
 ## `src/` surface touched on this branch
