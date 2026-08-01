@@ -222,6 +222,35 @@ want the churn across 29 files.
   records only `hackrf` and `rtl-sdr` among the vendor libraries in OpenBSD
   ports.
 
+- [ ] **Build the Debian package in CI.** `dpkg-buildpackage` is not a separate
+  build: `debian/rules` calls the top-level `Makefile` for both build and
+  install, only with different variables -- `prefix=/usr`,
+  `systemdunitdir=/usr/lib/systemd/system`, `udevdir=/usr/lib/udev/rules.d`,
+  and `DESTDIR=debian/tmp`. That is the one file this branch rewrote most
+  heavily, and no job exercises it: the existing jobs run `make` and
+  `make install` bare, with the default `/usr/local` prefix and an empty
+  `DESTDIR`. Three things only this path reaches:
+
+  - The `[ -z "$(DESTDIR)" ]` guard on the install target. Packaging must skip
+    `platform/create-radio-user` -- a staged build that created a system user
+    on the build host would be wrong even if it succeeded.
+  - Variable propagation. `prefix` and `systemdunitdir` arrive as command-line
+    variables, which override makefile assignments; `INIT_SYSTEM` uses
+    `override` for its own reasons. Nothing should collide, but that is
+    reasoning, not evidence.
+  - `debian/control`'s Build-Depends, which nothing has ever validated.
+
+  Shape: `apt build-dep -y ./` then `dpkg-buildpackage -us -uc -b`. Using
+  `build-dep` rather than a hand-written package list is the point -- it
+  installs exactly what `debian/control` declares, so an over-declared
+  dependency can be spotted by removing it and watching the build still pass,
+  which is precisely the evidence the `uuid-dev` removal lacked.
+
+  Honest limit: a hosted runner is not a clean chroot, so a preinstalled
+  package can mask a *missing* Build-Depends. `sbuild` or `pbuilder` would be
+  rigorous; `apt build-dep` on the runner is the cheap majority of the value.
+  Linux only -- there is no packaging path to test on the other three.
+
 - [x] **Update `docs/PORTABILITY.md` as CI proves cells.** Done for the three
   platforms with CI: Linux (10 drivers), FreeBSD (8) and macOS (7) all read
   `built`. Only OpenBSD still shows `pkg`, and it has no CI job yet.
