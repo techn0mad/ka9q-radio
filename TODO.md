@@ -24,12 +24,22 @@ also shrinks what the portability branches have to carry.
   reached any driver plugin.
 
 - [ ] **`avahi.h` includes seven unused Avahi headers** — `src/avahi.h`, commit
-  `3c1e5860`. Nothing in the tree references an Avahi library type or symbol;
-  `avahi.c` and `avahi_browse.c` shell out to the `avahi-*` command-line tools.
-  The includes force Avahi development headers onto every consumer of the
-  header for nothing, and they are unguarded, so any platform without them
-  fails to compile. The same commit fixes a broken include guard that tested
-  `_AVAHI_H` while defining `AVAHI_H`, so it never guarded anything.
+  `3c1e5860`. Nothing that is built references an Avahi library type or
+  symbol; `avahi.c` and `avahi_browse.c` shell out to the `avahi-*`
+  command-line tools. The includes force Avahi development headers onto every
+  consumer of the header for nothing, and they are unguarded, so any platform
+  without them fails to compile. The same commit fixes a broken include guard
+  that tested `_AVAHI_H` while defining `AVAHI_H` (`src/avahi.h:1` against
+  `:30`), so it never guarded anything.
+
+  Note before writing this up for upstream: `src/old/old-avahi.c` *does* use
+  `AvahiClient`, `AvahiEntryGroup`, `AvahiSimplePoll` and
+  `avahi_entry_group_get_client`, so the flat claim "nothing in the tree uses
+  Avahi" is false and a reviewer running the obvious grep will find it
+  immediately. It does not affect the argument -- `src/old/` appears nowhere
+  in `src/Makefile` and is not built -- but the claim has to be stated as
+  "nothing that is built", with `old-avahi.c` acknowledged rather than left
+  to be discovered.
 
 - [ ] **Vestigial `<uuid/uuid.h>` in `radio.c`** — commit `6d3e7aad`. The sole
   uuid reference in the tree, with no `uuid_*` call anywhere and no target
