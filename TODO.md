@@ -37,14 +37,14 @@ also shrinks what the portability branches have to carry.
   real. If accepted, `uuid-dev` can also come out of `docs/INSTALL.md`.
 
 - [ ] **String functions declared only by accident** — 12 files, commits
-  `ecaf310e` and `293fa1ea`. `airspy.c`, `bladerf.c`, `fobos.c`, `funcube.c`,
-  `misc.h` and seven others call `strncpy`, `strcmp`, `strstr`, `memset` and
-  `strlcpy` while getting `<string.h>` only transitively through
-  `<bsd/string.h>`, which sits behind `#if defined(linux)`. Harmless on Debian,
-  where that include is always taken, but the declarations are arriving by
-  accident rather than by design. Anywhere the guard excludes it, the compiler
-  falls back to implicit declarations and assumes `int` returns -- truncating
-  every pointer-returning call to 32 bits on a 64-bit target. Adding
+  `ecaf310e` and `293fa1ea`. Eleven of them -- `airspy.c`, `bladerf.c`,
+  `fobos.c`, `funcube.c`, `misc.h` and six others -- call `strncpy`, `strcmp`,
+  `strstr`, `memset` and `strlcpy` while getting `<string.h>` only transitively
+  through `<bsd/string.h>`, which sits behind `#if defined(linux)`. Harmless on
+  Debian, where that include is always taken, but the declarations are arriving
+  by accident rather than by design. Anywhere the guard excludes it, the
+  compiler falls back to implicit declarations and assumes `int` returns --
+  truncating every pointer-returning call to 32 bits on a 64-bit target. Adding
   `<string.h>` unconditionally is correct on every platform and costs Linux
   nothing.
 
