@@ -46,7 +46,7 @@ jobs:
           set -euo pipefail
           sudo apt-get install -y --no-install-recommends \
             avahi-utils build-essential make gcc \
-            libairspy-dev libairspyhf-dev libavahi-client-dev libbladerf-dev \
+            libairspy-dev libairspyhf-dev libbladerf-dev \
             libbsd-dev libfftw3-dev libfobos-dev libhackrf-dev libhydrasdr-dev \
             libiniparser-dev libliquid-dev libncurses5-dev libncursesw5-dev \
             libogg-dev libopus-dev librtlsdr-dev libsamplerate-dev \
