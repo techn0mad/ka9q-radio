@@ -25,7 +25,7 @@ jobs:
     name: Ubuntu 24.04 / systemd
     runs-on: ubuntu-24.04
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Add KA9Q apt repository
         # libfobos-dev and libhydrasdr-dev are not in the stock Ubuntu archive;
@@ -118,7 +118,7 @@ jobs:
     env:
       ENABLE_FLAGS: ENABLE_FOBOS=0 ENABLE_HYDRASDR=0 ENABLE_BLADERF=0
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Install MacPorts and build dependencies
         # Pinned to the v1.1.6 commit rather than a floating tag: this is a
@@ -184,7 +184,7 @@ jobs:
     # started on an Ubuntu host by the action below.
     runs-on: ubuntu-latest
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v6
 
       - name: Build and install in a FreeBSD VM
         # Pinned to the v1.5.2 commit rather than a floating tag: this is a
